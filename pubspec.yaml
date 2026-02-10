@@ -12,6 +12,10 @@ dependencies:
     sdk: flutter
   cupertino_icons: ^1.0.8
   google_fonts: ^6.2.1
+  amplify_flutter: ^2.9.0
+  amplify_auth_cognito: ^2.9.0
+  amplify_storage_s3: ^2.9.0
+  amplify_api: ^2.9.0
 
 dev_dependencies:
   flutter_test:

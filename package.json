@@ -1,5 +1,18 @@
 {
-  "dependencies": {
-    "@aws-amplify/cli": "^14.2.5"
-  }
+	"name": "photo-sense",
+	"version": "1.0.0",
+	"type": "module",
+	"dependencies": {
+		"@aws-amplify/cli": "^14.2.5",
+		"aws-amplify": "^6.16.2"
+	},
+	"devDependencies": {
+		"@aws-amplify/backend": "^1.20.0",
+		"@aws-amplify/backend-cli": "^1.8.2",
+		"aws-cdk-lib": "^2.234.1",
+		"constructs": "^10.4.5",
+		"esbuild": "^0.27.3",
+		"tsx": "^4.21.0",
+		"typescript": "^5.9.3"
+	}
 }

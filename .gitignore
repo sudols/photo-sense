@@ -43,3 +43,25 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+# Node/NPM (for Amplify backend)
+node_modules/
+package-lock.json
+npm-debug.log*
+.npm
+
+# Amplify
+.amplify/
+amplify_outputs*
+amplifyconfiguration*
+amplify-build-config.json
+amplify-gradle-config.json
+amplifytools.xcconfig
+amplifyxc.config
+
+# CDK (Amplify Gen 2)
+cdk.out/
+.cdk.staging/
+
+# Lambda function dependencies
+amplify/functions/**/node_modules/
+amplify/functions/**/package-lock.json
