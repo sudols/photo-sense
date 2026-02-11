@@ -11,6 +11,7 @@ import '../auth/sign_in_screen.dart';
 import '../auth/sign_in_screen.dart';
 import '../photo/photo_detail_screen.dart';
 import '../people/people_screen.dart';
+import '../search/search_screen.dart';
 
 /// Home screen with photo grid and upload functionality
 class HomeScreen extends StatefulWidget {
@@ -238,7 +239,10 @@ class _HomeScreenState extends State<HomeScreen> {
                   child: _photos.isEmpty ? _buildEmptyState(colorScheme) : _buildPhotoGrid(),
                 ),
           
-          // Tab 1: People
+          // Tab 1: Search
+          const SearchScreen(),
+
+          // Tab 2: People
           const PeopleScreen(),
         ],
       ),
@@ -254,6 +258,11 @@ class _HomeScreenState extends State<HomeScreen> {
             icon: Icon(Icons.photo_outlined),
             selectedIcon: Icon(Icons.photo),
             label: 'Photos',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.search_outlined),
+            selectedIcon: Icon(Icons.search),
+            label: 'Search',
           ),
           NavigationDestination(
             icon: Icon(Icons.people_outlined),
