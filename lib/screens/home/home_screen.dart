@@ -8,7 +8,9 @@ import '../../models/Photo.dart';
 import '../../services/auth_service.dart';
 import '../../widgets/photo_grid_item.dart';
 import '../auth/sign_in_screen.dart';
+import '../auth/sign_in_screen.dart';
 import '../photo/photo_detail_screen.dart';
+import '../people/people_screen.dart';
 
 /// Home screen with photo grid and upload functionality
 class HomeScreen extends StatefulWidget {
@@ -192,6 +194,15 @@ class _HomeScreenState extends State<HomeScreen> {
           ],
         ),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.people_alt_outlined),
+            tooltip: 'People',
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const PeopleScreen()),
+              );
+            },
+          ),
           PopupMenuButton<String>(
             icon: CircleAvatar(
               backgroundColor: colorScheme.primaryContainer,

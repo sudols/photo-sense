@@ -14,15 +14,26 @@ class FaceAvatar extends StatelessWidget {
     this.size = 60,
     this.name,
     this.onTap,
+    this.showLabel = true,
   });
+
+  final bool showLabel;
 
   @override
   Widget build(BuildContext context) {
-    // boundingBox has {Width, Height, Left, Top} as 0.0-1.0 fractions
-    final double bw = boundingBox['Width']?.toDouble() ?? 0.1;
-    final double bh = boundingBox['Height']?.toDouble() ?? 0.1;
-    final double bl = boundingBox['Left']?.toDouble() ?? 0.0;
-    final double bt = boundingBox['Top']?.toDouble() ?? 0.0;
+    // Check if bounding box is valid/non-empty
+    final bool hasValidBox = boundingBox.isNotEmpty && 
+                             boundingBox.containsKey('Width') && 
+                             boundingBox.containsKey('Height');
+
+    final double bw = hasValidBox ? (boundingBox['Width']?.toDouble() ?? 0.1) : 1.0;
+    final double bh = hasValidBox ? (boundingBox['Height']?.toDouble() ?? 0.1) : 1.0;
+    final double bl = hasValidBox ? (boundingBox['Left']?.toDouble() ?? 0.0) : 0.0;
+    final double bt = hasValidBox ? (boundingBox['Top']?.toDouble() ?? 0.0) : 0.0;
+    
+    // If no valid box, we render center aligned with scale 1
+    final double centerX = hasValidBox ? (bl + bw / 2) * 2 - 1 : 0.0;
+    final double centerY = hasValidBox ? (bt + bh / 2) * 2 - 1 : 0.0;
 
     // To crop strictly to the face, we need to scale the image so that the face
     // fills the 'size'.
@@ -56,8 +67,6 @@ class FaceAvatar extends StatelessWidget {
     // Let's use `Alignment` approach which is robust against unknown aspect ratios.
     // We calculate the center of the face in -1.0 to 1.0 coordinate space.
     
-    final double centerX = (bl + bw / 2) * 2 - 1;
-    final double centerY = (bt + bh / 2) * 2 - 1;
 
     return GestureDetector(
       onTap: onTap,
@@ -146,15 +155,17 @@ class FaceAvatar extends StatelessWidget {
               errorBuilder: (_,__,___) => const Icon(Icons.person, color: Colors.grey),
             ),
           ),
-          const SizedBox(height: 4),
-          if (name != null)
-             Text(
-              name!,
-              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-              overflow: TextOverflow.ellipsis,
-             )
-          else
-            const Icon(Icons.add_circle_outline, size: 16, color: Colors.blue),
+          if (showLabel) ...[
+            const SizedBox(height: 4),
+            if (name != null)
+              Text(
+                name!,
+                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                overflow: TextOverflow.ellipsis,
+              )
+            else
+              const Icon(Icons.add_circle_outline, size: 16, color: Colors.blue),
+          ],
         ],
       ),
     );

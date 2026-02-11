@@ -91,18 +91,18 @@ class _PhotoDetailScreenState extends State<PhotoDetailScreen> {
     }
   }
 
-  Future<void> _handleFaceTap(String faceId, String? existingName) async {
+  Future<void> _handleFaceTap(String faceId, String? existingName, Map<String, dynamic> boundingBox) async {
     final name = await showDialog<String>(
       context: context,
       builder: (context) => NameFaceDialog(initialName: existingName),
     );
 
     if (name != null && name.isNotEmpty) {
-       await _savePersonDocs(faceId, name);
+       await _savePersonDocs(faceId, name, jsonEncode(boundingBox));
     }
   }
 
-  Future<void> _savePersonDocs(String faceId, String name) async {
+  Future<void> _savePersonDocs(String faceId, String name, String boundingBoxString) async {
     setState(() => _isLoading = true);
     try {
       // 1. Check if Person exists by name
@@ -121,7 +121,13 @@ class _PhotoDetailScreenState extends State<PhotoDetailScreen> {
       if (person != null) {
         if (person.faceIds == null || !person.faceIds!.contains(faceId)) {
           final List<String> updatedFaceIds = [...(person.faceIds ?? []), faceId];
-          final updatedPerson = person.copyWith(faceIds: updatedFaceIds);
+          // Determine if we should update the thumbnail/boundingBox to this new face if the current one is broken?
+          // For now, keep the original unless it's null.
+          final updatedPerson = person.copyWith(
+            faceIds: updatedFaceIds,
+            boundingBox: person.boundingBox ?? boundingBoxString,
+            thumbnailS3Key: person.thumbnailS3Key ?? widget.photo.s3Key,
+          );
           await Amplify.API.mutate(request: ModelMutations.update(updatedPerson)).response;
           safePrint('Updated Person ${person.name} with new faceId');
         }
@@ -130,6 +136,7 @@ class _PhotoDetailScreenState extends State<PhotoDetailScreen> {
           name: name,
           faceId: faceId,
           faceIds: [faceId],
+          boundingBox: boundingBoxString,
           thumbnailS3Key: widget.photo.s3Key,
         );
         final createRes = await Amplify.API.mutate(request: ModelMutations.create(person)).response;
@@ -286,7 +293,7 @@ class _PhotoDetailScreenState extends State<PhotoDetailScreen> {
                                imageUrl: _imageUrl!,
                                boundingBox: box,
                                name: personName,
-                               onTap: () => _handleFaceTap(faceId, personName),
+                               onTap: () => _handleFaceTap(faceId, personName, box),
                              );
                            } catch (e) {
                              return const SizedBox();
