@@ -43,16 +43,16 @@ This file tracks the implementation progress of the PhotoSense application.
 
 _Goal: Group faces into named identities._
 
-- [ ] **Backend - Person Logic**:
-  - [ ] Create a mechanism to associate a `faceId` with a `Person` entity.
-  - [ ] Implement strict face matching to group similar `faceIds` under one `Person`.
+- [x] **Backend - Person Logic**:
+  - [x] Create a mechanism to associate a `faceId` with a `Person` entity.
+  - [ ] Implement strict face matching to group similar `faceIds` under one `Person` (Phase 3).
 - [ ] **UI - People Tab**:
   - [ ] Create `PeopleScreen` tab in the main navigation.
   - [ ] Display list of identified people (thumbnails + names).
   - [ ] Display "Unidentified" group for faces without names.
-- [ ] **UI - Tagging Flow**:
-  - [ ] Allow user to tap a face (or face bounding box) on `PhotoDetailScreen`.
-  - [ ] detailed view to assign a name to a face (creates/links `Person`).
+- [x] **UI - Tagging Flow**:
+  - [x] Allow user to tap a face (or face bounding box) on `PhotoDetailScreen`.
+  - [x] Detailed view to assign a name to a face (creates/links `Person`).
 
 ### 2. Search & Discovery (Priority: Medium)
 
@@ -67,7 +67,9 @@ _Goal: Find photos by content._
 
 ### 3. Advanced UI/UX (Priority: Low)
 
-- [ ] **Bounding Boxes**: Draw boxes around faces and text in `PhotoDetailScreen` (requires storing bounding box data in `Photo` model).
+- [x] **Bounding Boxes**: Draw boxes around faces and text in `PhotoDetailScreen` (requires storing bounding box data in `Photo` model).
+  - [x] Backend: Store `detectedFaces` JSON.
+  - [x] Frontend: Draw boxes in `PhotoDetailScreen`.
 - [ ] **Infinite Scroll**: Optimize `HomeScreen` for large libraries (currently fetches all).
 - [ ] **Albums/Folders**: Logical grouping of photos.
 

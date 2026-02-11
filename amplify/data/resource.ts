@@ -16,6 +16,7 @@ const schema = a.schema({
 		.model({
 			name: a.string().required(),
 			faceId: a.string(),
+			faceIds: a.string().array(),
 			thumbnailS3Key: a.string(),
 		})
 		.authorization((allow) => [allow.owner()]),

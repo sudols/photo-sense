@@ -8,6 +8,7 @@ class Person extends amplify_core.Model {
   final String id;
   final String? _name;
   final String? _faceId;
+  final List<String>? _faceIds;
   final String? _thumbnailS3Key;
   final amplify_core.TemporalDateTime? _createdAt;
   final amplify_core.TemporalDateTime? _updatedAt;
@@ -35,22 +36,25 @@ class Person extends amplify_core.Model {
   }
 
   String? get faceId => _faceId;
+  List<String>? get faceIds => _faceIds;
   String? get thumbnailS3Key => _thumbnailS3Key;
   amplify_core.TemporalDateTime? get createdAt => _createdAt;
   amplify_core.TemporalDateTime? get updatedAt => _updatedAt;
 
-  const Person._internal({required this.id, required name, faceId, thumbnailS3Key, createdAt, updatedAt})
+  const Person._internal({required this.id, required name, faceId, faceIds, thumbnailS3Key, createdAt, updatedAt})
       : _name = name,
         _faceId = faceId,
+        _faceIds = faceIds,
         _thumbnailS3Key = thumbnailS3Key,
         _createdAt = createdAt,
         _updatedAt = updatedAt;
 
-  factory Person({String? id, required String name, String? faceId, String? thumbnailS3Key}) {
+  factory Person({String? id, required String name, String? faceId, List<String>? faceIds, String? thumbnailS3Key}) {
     return Person._internal(
       id: id == null ? amplify_core.UUID.getUUID() : id,
       name: name,
       faceId: faceId,
+      faceIds: faceIds != null ? List<String>.unmodifiable(faceIds) : faceIds,
       thumbnailS3Key: thumbnailS3Key,
     );
   }
@@ -60,7 +64,12 @@ class Person extends amplify_core.Model {
   @override
   bool operator ==(Object other) {
     if (identical(other, this)) return true;
-    return other is Person && id == other.id && _name == other._name && _faceId == other._faceId && _thumbnailS3Key == other._thumbnailS3Key;
+    return other is Person &&
+        id == other.id &&
+        _name == other._name &&
+        _faceId == other._faceId &&
+        _faceIds == other._faceIds &&
+        _thumbnailS3Key == other._thumbnailS3Key;
   }
 
   @override
@@ -73,6 +82,7 @@ class Person extends amplify_core.Model {
     buffer.write("id=" + "$id" + ", ");
     buffer.write("name=" + "$_name" + ", ");
     buffer.write("faceId=" + "$_faceId" + ", ");
+    buffer.write("faceIds=" + (_faceIds != null ? _faceIds.toString() : "null") + ", ");
     buffer.write("thumbnailS3Key=" + "$_thumbnailS3Key" + ", ");
     buffer.write("createdAt=" + (_createdAt != null ? _createdAt!.format() : "null") + ", ");
     buffer.write("updatedAt=" + (_updatedAt != null ? _updatedAt!.format() : "null"));
@@ -80,11 +90,12 @@ class Person extends amplify_core.Model {
     return buffer.toString();
   }
 
-  Person copyWith({String? name, String? faceId, String? thumbnailS3Key}) {
+  Person copyWith({String? name, String? faceId, List<String>? faceIds, String? thumbnailS3Key}) {
     return Person._internal(
       id: id,
       name: name ?? this.name,
       faceId: faceId ?? this.faceId,
+      faceIds: faceIds ?? this.faceIds,
       thumbnailS3Key: thumbnailS3Key ?? this.thumbnailS3Key,
     );
   }
@@ -93,6 +104,7 @@ class Person extends amplify_core.Model {
       : id = json['id'],
         _name = json['name'],
         _faceId = json['faceId'],
+        _faceIds = json['faceIds']?.cast<String>(),
         _thumbnailS3Key = json['thumbnailS3Key'],
         _createdAt = json['createdAt'] != null ? amplify_core.TemporalDateTime.fromString(json['createdAt']) : null,
         _updatedAt = json['updatedAt'] != null ? amplify_core.TemporalDateTime.fromString(json['updatedAt']) : null;
@@ -101,6 +113,7 @@ class Person extends amplify_core.Model {
         'id': id,
         'name': _name,
         'faceId': _faceId,
+        'faceIds': _faceIds,
         'thumbnailS3Key': _thumbnailS3Key,
         'createdAt': _createdAt?.format(),
         'updatedAt': _updatedAt?.format(),
@@ -110,6 +123,7 @@ class Person extends amplify_core.Model {
         'id': id,
         'name': _name,
         'faceId': _faceId,
+        'faceIds': _faceIds,
         'thumbnailS3Key': _thumbnailS3Key,
         'createdAt': _createdAt,
         'updatedAt': _updatedAt,
@@ -120,6 +134,7 @@ class Person extends amplify_core.Model {
   static final ID = amplify_core.QueryField(fieldName: "id");
   static final NAME = amplify_core.QueryField(fieldName: "name");
   static final FACEID = amplify_core.QueryField(fieldName: "faceId");
+  static final FACEIDS = amplify_core.QueryField(fieldName: "faceIds");
   static final THUMBNAILS3KEY = amplify_core.QueryField(fieldName: "thumbnailS3Key");
 
   static var schema = amplify_core.Model.defineSchema(define: (amplify_core.ModelSchemaDefinition modelSchemaDefinition) {
@@ -147,6 +162,9 @@ class Person extends amplify_core.Model {
 
     modelSchemaDefinition.addField(amplify_core.ModelFieldDefinition.field(
         key: Person.FACEID, isRequired: false, ofType: amplify_core.ModelFieldType(amplify_core.ModelFieldTypeEnum.string)));
+
+    modelSchemaDefinition.addField(amplify_core.ModelFieldDefinition.field(
+        key: Person.FACEIDS, isRequired: false, isArray: true, ofType: amplify_core.ModelFieldType(amplify_core.ModelFieldTypeEnum.string)));
 
     modelSchemaDefinition.addField(amplify_core.ModelFieldDefinition.field(
         key: Person.THUMBNAILS3KEY,
