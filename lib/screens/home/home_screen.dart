@@ -178,6 +178,8 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  int _currentIndex = 0;
+
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
@@ -194,15 +196,6 @@ class _HomeScreenState extends State<HomeScreen> {
           ],
         ),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.people_alt_outlined),
-            tooltip: 'People',
-            onPressed: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const PeopleScreen()),
-              );
-            },
-          ),
           PopupMenuButton<String>(
             icon: CircleAvatar(
               backgroundColor: colorScheme.primaryContainer,
@@ -234,22 +227,53 @@ class _HomeScreenState extends State<HomeScreen> {
           const SizedBox(width: 8),
         ],
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : RefreshIndicator(
-              onRefresh: _fetchPhotos,
-              child: _photos.isEmpty ? _buildEmptyState(colorScheme) : _buildPhotoGrid(),
-            ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _isUploading ? null : _uploadPhoto,
-        icon: _isUploading
-            ? SizedBox(
-                width: 20, height: 20,
-                child: CircularProgressIndicator(strokeWidth: 2, color: colorScheme.onPrimaryContainer),
-              )
-            : const Icon(Icons.add_photo_alternate_outlined),
-        label: Text(_isUploading ? 'Uploading...' : 'Upload Photo'),
+      body: IndexedStack(
+        index: _currentIndex,
+        children: [
+          // Tab 0: Photos
+          _isLoading
+              ? const Center(child: CircularProgressIndicator())
+              : RefreshIndicator(
+                  onRefresh: _fetchPhotos,
+                  child: _photos.isEmpty ? _buildEmptyState(colorScheme) : _buildPhotoGrid(),
+                ),
+          
+          // Tab 1: People
+          const PeopleScreen(),
+        ],
       ),
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: _currentIndex,
+        onDestinationSelected: (index) {
+          setState(() {
+            _currentIndex = index;
+          });
+        },
+        destinations: const [
+          NavigationDestination(
+            icon: Icon(Icons.photo_outlined),
+            selectedIcon: Icon(Icons.photo),
+            label: 'Photos',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.people_outlined),
+            selectedIcon: Icon(Icons.people),
+            label: 'People',
+          ),
+        ],
+      ),
+      floatingActionButton: _currentIndex == 0 
+        ? FloatingActionButton.extended(
+            onPressed: _isUploading ? null : _uploadPhoto,
+            icon: _isUploading
+                ? SizedBox(
+                    width: 20, height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: colorScheme.onPrimaryContainer),
+                  )
+                : const Icon(Icons.add_photo_alternate_outlined),
+            label: Text(_isUploading ? 'Uploading...' : 'Upload Photo'),
+          )
+        : null,
     );
   }
 
