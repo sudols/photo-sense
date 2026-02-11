@@ -9,17 +9,20 @@ import {
 } from '@aws-sdk/client-rekognition';
 import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
 
+import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import { DynamoDBDocumentClient, UpdateCommand } from '@aws-sdk/lib-dynamodb';
+
 const rekognition = new RekognitionClient();
 const s3 = new S3Client();
+const ddb = new DynamoDBClient({});
+const ddbDoc = DynamoDBDocumentClient.from(ddb);
 
 const COLLECTION_ID =
 	process.env.REKOGNITION_COLLECTION_ID || 'photosense-faces';
+const PHOTO_TABLE_NAME = process.env.PHOTO_TABLE_NAME;
 
 interface AnalyzePhotoEvent {
-	arguments: {
-		s3Key: string;
-		bucketName: string;
-	};
+	// ... existing interface ...
 }
 
 interface AnalyzePhotoResult {
@@ -27,6 +30,76 @@ interface AnalyzePhotoResult {
 	facesCount: number;
 	detectedText: string[];
 }
+
+// ... helper functions ...
+
+/**
+ * Lambda handler: analyzes a photo in S3 for faces and text.
+ * Triggered by S3 ObjectCreated event.
+ */
+export const handler = async (event: any): Promise<void> => {
+	console.log('Received S3 event:', JSON.stringify(event, null, 2));
+
+	for (const record of event.Records) {
+		const s3Key = decodeURIComponent(record.s3.object.key.replace(/\+/g, ' '));
+		const bucketName = record.s3.bucket.name;
+
+		console.log(`Analyzing photo: ${s3Key} in bucket: ${bucketName}`);
+
+		try {
+			// Ensure face collection exists
+			await ensureCollection();
+
+			// Run face indexing and text detection in parallel
+			const [faceResult, detectedText] = await Promise.all([
+				indexFaces(bucketName, s3Key),
+				detectText(bucketName, s3Key),
+			]);
+
+			const result: AnalyzePhotoResult = {
+				faceIds: faceResult.faceIds,
+				facesCount: faceResult.facesCount,
+				detectedText,
+			};
+
+			console.log(`Analysis result for ${s3Key}:`, JSON.stringify(result));
+
+			// Update DynamoDB if table name is available
+			if (PHOTO_TABLE_NAME) {
+				// Extract ID from s3Key: photos/identityId/uuid.ext -> uuid
+				const fileName = s3Key.split('/').pop();
+				const photoId = fileName?.split('.')[0];
+
+				if (photoId) {
+					console.log(
+						`Updating Photo record ${photoId} in table ${PHOTO_TABLE_NAME}`,
+					);
+					await ddbDoc.send(
+						new UpdateCommand({
+							TableName: PHOTO_TABLE_NAME,
+							Key: { id: photoId },
+							UpdateExpression:
+								'SET facesCount = :fc, detectedText = :dt, faceIds = :fi, analyzedAt = :at',
+							ExpressionAttributeValues: {
+								':fc': result.facesCount,
+								':dt': result.detectedText,
+								':fi': result.faceIds,
+								':at': new Date().toISOString(),
+							},
+						}),
+					);
+					console.log(`Updated Photo record ${photoId}`);
+				} else {
+					console.warn('Could not extract photo ID from S3 key:', s3Key);
+				}
+			} else {
+				console.warn('PHOTO_TABLE_NAME not set, skipping DynamoDB update');
+			}
+		} catch (error) {
+			console.error(`Error processing ${s3Key}:`, error);
+		}
+	}
+};
 
 /**
  * Ensures the Rekognition face collection exists, creating it if needed.
@@ -118,33 +191,3 @@ async function detectText(
 		return [];
 	}
 }
-
-/**
- * Lambda handler: analyzes a photo in S3 for faces and text.
- */
-export const handler = async (
-	event: AnalyzePhotoEvent,
-): Promise<AnalyzePhotoResult> => {
-	const { s3Key, bucketName } = event.arguments;
-
-	console.log(`Analyzing photo: ${s3Key} in bucket: ${bucketName}`);
-
-	// Ensure face collection exists
-	await ensureCollection();
-
-	// Run face indexing and text detection in parallel
-	const [faceResult, detectedText] = await Promise.all([
-		indexFaces(bucketName, s3Key),
-		detectText(bucketName, s3Key),
-	]);
-
-	const result: AnalyzePhotoResult = {
-		faceIds: faceResult.faceIds,
-		facesCount: faceResult.facesCount,
-		detectedText,
-	};
-
-	console.log(`Analysis result:`, JSON.stringify(result));
-
-	return result;
-};

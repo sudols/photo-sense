@@ -8,4 +8,5 @@ export const analyzePhoto = defineFunction({
 	environment: {
 		REKOGNITION_COLLECTION_ID: 'photosense-faces',
 	},
+	resourceGroupName: 'storage',
 });

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../services/mock_data_service.dart';
+import '../../services/auth_service.dart';
 import '../home/home_screen.dart';
 import 'sign_up_screen.dart';
 
@@ -31,7 +31,7 @@ class _SignInScreenState extends State<SignInScreen> {
     setState(() => _isLoading = true);
 
     try {
-      await MockDataService.signIn(
+      await AuthService.signIn(
         _emailController.text.trim(),
         _passwordController.text,
       );

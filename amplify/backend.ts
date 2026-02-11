@@ -1,5 +1,7 @@
 import { defineBackend } from '@aws-amplify/backend';
 import { PolicyStatement, Effect } from 'aws-cdk-lib/aws-iam';
+import { EventType } from 'aws-cdk-lib/aws-s3';
+import { LambdaDestination } from 'aws-cdk-lib/aws-s3-notifications';
 import { auth } from './auth/resource';
 import { data } from './data/resource';
 import { storage } from './storage/resource';
@@ -33,5 +35,16 @@ analyzePhotoLambda.addToRolePolicy(
 const s3Bucket = backend.storage.resources.bucket;
 s3Bucket.grantRead(analyzePhotoLambda);
 
-// Pass the bucket name to the Lambda as an environment variable
-backend.analyzePhoto.addEnvironment('PHOTO_BUCKET_NAME', s3Bucket.bucketName);
+// Grant Lambda access to DynamoDB Photo table
+const photoTable = backend.data.resources.tables['Photo'];
+if (photoTable) {
+	photoTable.grantWriteData(analyzePhotoLambda);
+	backend.analyzePhoto.addEnvironment('PHOTO_TABLE_NAME', photoTable.tableName);
+}
+
+// Trigger Lambda when a photo is uploaded
+s3Bucket.addEventNotification(
+	EventType.OBJECT_CREATED,
+	new LambdaDestination(analyzePhotoLambda),
+	{ prefix: 'photos/' },
+);
