@@ -19,6 +19,7 @@ const schema = a.schema({
 			faceIds: a.string().array(),
 			boundingBox: a.string(), // JSON string: {Width, Height, Left, Top}
 			thumbnailS3Key: a.string(),
+			isUnnamed: a.boolean(),
 		})
 		.authorization((allow) => [allow.owner()]),
 

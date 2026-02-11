@@ -14,6 +14,8 @@ class Person extends amplify_core.Model {
   final amplify_core.TemporalDateTime? _createdAt;
   final amplify_core.TemporalDateTime? _updatedAt;
 
+  final bool? _isUnnamed;
+
   @override
   getInstanceType() => classType;
 
@@ -40,19 +42,21 @@ class Person extends amplify_core.Model {
   List<String>? get faceIds => _faceIds;
   String? get boundingBox => _boundingBox;
   String? get thumbnailS3Key => _thumbnailS3Key;
+  bool? get isUnnamed => _isUnnamed;
   amplify_core.TemporalDateTime? get createdAt => _createdAt;
   amplify_core.TemporalDateTime? get updatedAt => _updatedAt;
 
-  const Person._internal({required this.id, required name, faceId, faceIds, boundingBox, thumbnailS3Key, createdAt, updatedAt})
+  const Person._internal({required this.id, required name, faceId, faceIds, boundingBox, thumbnailS3Key, isUnnamed, createdAt, updatedAt})
       : _name = name,
         _faceId = faceId,
         _faceIds = faceIds,
         _boundingBox = boundingBox,
         _thumbnailS3Key = thumbnailS3Key,
+        _isUnnamed = isUnnamed,
         _createdAt = createdAt,
         _updatedAt = updatedAt;
 
-  factory Person({String? id, required String name, String? faceId, List<String>? faceIds, String? boundingBox, String? thumbnailS3Key}) {
+  factory Person({String? id, required String name, String? faceId, List<String>? faceIds, String? boundingBox, String? thumbnailS3Key, bool? isUnnamed}) {
     return Person._internal(
       id: id == null ? amplify_core.UUID.getUUID() : id,
       name: name,
@@ -60,6 +64,7 @@ class Person extends amplify_core.Model {
       faceIds: faceIds != null ? List<String>.unmodifiable(faceIds) : faceIds,
       boundingBox: boundingBox,
       thumbnailS3Key: thumbnailS3Key,
+      isUnnamed: isUnnamed,
     );
   }
 
@@ -74,7 +79,8 @@ class Person extends amplify_core.Model {
         _faceId == other._faceId &&
         _faceIds == other._faceIds &&
         _boundingBox == other._boundingBox &&
-        _thumbnailS3Key == other._thumbnailS3Key;
+        _thumbnailS3Key == other._thumbnailS3Key &&
+        _isUnnamed == other._isUnnamed;
   }
 
   @override
@@ -90,13 +96,14 @@ class Person extends amplify_core.Model {
     buffer.write("faceIds=" + (_faceIds != null ? _faceIds.toString() : "null") + ", ");
     buffer.write("boundingBox=" + "$_boundingBox" + ", ");
     buffer.write("thumbnailS3Key=" + "$_thumbnailS3Key" + ", ");
+    buffer.write("isUnnamed=" + "$_isUnnamed" + ", ");
     buffer.write("createdAt=" + (_createdAt != null ? _createdAt!.format() : "null") + ", ");
     buffer.write("updatedAt=" + (_updatedAt != null ? _updatedAt!.format() : "null"));
     buffer.write("}");
     return buffer.toString();
   }
 
-  Person copyWith({String? name, String? faceId, List<String>? faceIds, String? boundingBox, String? thumbnailS3Key}) {
+  Person copyWith({String? name, String? faceId, List<String>? faceIds, String? boundingBox, String? thumbnailS3Key, bool? isUnnamed}) {
     return Person._internal(
       id: id,
       name: name ?? this.name,
@@ -104,6 +111,7 @@ class Person extends amplify_core.Model {
       faceIds: faceIds ?? this.faceIds,
       boundingBox: boundingBox ?? this.boundingBox,
       thumbnailS3Key: thumbnailS3Key ?? this.thumbnailS3Key,
+      isUnnamed: isUnnamed ?? this.isUnnamed,
     );
   }
 
@@ -114,6 +122,7 @@ class Person extends amplify_core.Model {
         _faceIds = json['faceIds']?.cast<String>(),
         _boundingBox = json['boundingBox'],
         _thumbnailS3Key = json['thumbnailS3Key'],
+        _isUnnamed = json['isUnnamed'],
         _createdAt = json['createdAt'] != null ? amplify_core.TemporalDateTime.fromString(json['createdAt']) : null,
         _updatedAt = json['updatedAt'] != null ? amplify_core.TemporalDateTime.fromString(json['updatedAt']) : null;
 
@@ -124,6 +133,7 @@ class Person extends amplify_core.Model {
         'faceIds': _faceIds,
         'boundingBox': _boundingBox,
         'thumbnailS3Key': _thumbnailS3Key,
+        'isUnnamed': _isUnnamed,
         'createdAt': _createdAt?.format(),
         'updatedAt': _updatedAt?.format(),
       };
@@ -135,6 +145,7 @@ class Person extends amplify_core.Model {
         'faceIds': _faceIds,
         'boundingBox': _boundingBox,
         'thumbnailS3Key': _thumbnailS3Key,
+        'isUnnamed': _isUnnamed,
         'createdAt': _createdAt,
         'updatedAt': _updatedAt,
       };
@@ -147,6 +158,7 @@ class Person extends amplify_core.Model {
   static final FACEIDS = amplify_core.QueryField(fieldName: "faceIds");
   static final BOUNDINGBOX = amplify_core.QueryField(fieldName: "boundingBox");
   static final THUMBNAILS3KEY = amplify_core.QueryField(fieldName: "thumbnailS3Key");
+  static final ISUNNAMED = amplify_core.QueryField(fieldName: "isUnnamed");
 
   static var schema = amplify_core.Model.defineSchema(define: (amplify_core.ModelSchemaDefinition modelSchemaDefinition) {
     modelSchemaDefinition.name = "Person";
@@ -184,6 +196,11 @@ class Person extends amplify_core.Model {
         key: Person.THUMBNAILS3KEY,
         isRequired: false,
         ofType: amplify_core.ModelFieldType(amplify_core.ModelFieldTypeEnum.string)));
+
+    modelSchemaDefinition.addField(amplify_core.ModelFieldDefinition.field(
+        key: Person.ISUNNAMED,
+        isRequired: false,
+        ofType: amplify_core.ModelFieldType(amplify_core.ModelFieldTypeEnum.bool)));
 
     modelSchemaDefinition.addField(amplify_core.ModelFieldDefinition.nonQueryField(
         fieldName: 'createdAt', isRequired: false, isReadOnly: true, ofType: amplify_core.ModelFieldType(amplify_core.ModelFieldTypeEnum.dateTime)));

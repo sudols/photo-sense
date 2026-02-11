@@ -2,8 +2,15 @@ import 'package:flutter/material.dart';
 
 class NameFaceDialog extends StatefulWidget {
   final String? initialName;
+  final String? title;
+  final String? subtitle;
 
-  const NameFaceDialog({super.key, this.initialName});
+  const NameFaceDialog({
+    super.key, 
+    this.initialName,
+    this.title,
+    this.subtitle,
+  });
 
   @override
   State<NameFaceDialog> createState() => _NameFaceDialogState();
@@ -28,12 +35,17 @@ class _NameFaceDialogState extends State<NameFaceDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text('Who is this?'),
+      title: Text(widget.title ?? 'Who is this?'),
       content: Form(
         key: _formKey,
         child: Column(
           mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            if (widget.subtitle != null) ...[
+              Text(widget.subtitle!, style: Theme.of(context).textTheme.bodyMedium),
+              const SizedBox(height: 16),
+            ],
             TextFormField(
               controller: _controller,
               autofocus: true,

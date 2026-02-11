@@ -14,7 +14,7 @@ const backend = defineBackend({
 	analyzePhoto,
 });
 
-// Grant the Lambda function permissions to use Rekognition
+// Grant permissions for analyze-photo
 const analyzePhotoLambda = backend.analyzePhoto.resources.lambda;
 
 analyzePhotoLambda.addToRolePolicy(
@@ -22,6 +22,7 @@ analyzePhotoLambda.addToRolePolicy(
 		effect: Effect.ALLOW,
 		actions: [
 			'rekognition:IndexFaces',
+			'rekognition:SearchFaces',
 			'rekognition:SearchFacesByImage',
 			'rekognition:DetectText',
 			'rekognition:CreateCollection',
@@ -37,9 +38,30 @@ s3Bucket.grantRead(analyzePhotoLambda);
 
 // Grant Lambda access to DynamoDB Photo table
 const photoTable = backend.data.resources.tables['Photo'];
+const personTable = backend.data.resources.tables['Person'];
+const photoPersonTable = backend.data.resources.tables['PhotoPerson'];
+
 if (photoTable) {
-	photoTable.grantWriteData(analyzePhotoLambda);
+	photoTable.grantReadWriteData(analyzePhotoLambda);
 	backend.analyzePhoto.addEnvironment('PHOTO_TABLE_NAME', photoTable.tableName);
+}
+
+if (personTable) {
+	personTable.grantWriteData(analyzePhotoLambda);
+	// Also grant Scan/Query for checking existing faces
+	personTable.grantReadData(analyzePhotoLambda);
+	backend.analyzePhoto.addEnvironment(
+		'PERSON_TABLE_NAME',
+		personTable.tableName,
+	);
+}
+
+if (photoPersonTable) {
+	photoPersonTable.grantWriteData(analyzePhotoLambda);
+	backend.analyzePhoto.addEnvironment(
+		'PHOTOPERSON_TABLE_NAME',
+		photoPersonTable.tableName,
+	);
 }
 
 // Trigger Lambda when a photo is uploaded

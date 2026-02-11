@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:amplify_flutter/amplify_flutter.dart';
 import 'package:amplify_api/amplify_api.dart';
+import 'package:amplify_storage_s3/amplify_storage_s3.dart';
 import '../../models/Photo.dart';
 import '../../models/Person.dart';
 import '../../models/PhotoPerson.dart';
@@ -22,20 +23,19 @@ class _PhotoDetailScreenState extends State<PhotoDetailScreen> {
   String? _imageUrl;
   bool _isLoading = true;
   bool _isDeleting = false;
-  Map<String, String> _faceNames = {}; // Map faceId -> Person Name
-
+  Map<String, Person> _facePersons = {}; // Map faceId -> Person
+    
   @override
   void initState() {
     super.initState();
     _loadImageUrl();
-    _loadFaceNames();
+    _loadFaceData();
   }
 
-  Future<void> _loadFaceNames() async {
+  Future<void> _loadFaceData() async {
     if (widget.photo.detectedFaces == null) return;
     
     try {
-       // Get all faceIds in this photo
        final faceIds = widget.photo.detectedFaces!.map((f) {
           try {
             return jsonDecode(f)['faceId'] as String;
@@ -45,20 +45,18 @@ class _PhotoDetailScreenState extends State<PhotoDetailScreen> {
        }).where((id) => id.isNotEmpty).toList();
 
        if (faceIds.isEmpty) return;
-
-       // Query People who have these faceIds
-       // Current schema limitations: List Person and filter locally. 
-       // Ideal: Query Person where faceIds contains X. (Not supported in standard list without search index)
+       
+       // Ideally query by list of IDs. For now list all.
        final request = ModelQueries.list(Person.classType);
        final response = await Amplify.API.query(request: request).response;
        final persons = response.data?.items.whereType<Person>().toList() ?? [];
 
-       final newMap = <String, String>{};
+       final newMap = <String, Person>{};
        for (var person in persons) {
          if (person.faceIds != null) {
            for (var faceId in faceIds) {
              if (person.faceIds!.contains(faceId)) {
-               newMap[faceId] = person.name;
+               newMap[faceId] = person;
              }
            }
          }
@@ -66,11 +64,11 @@ class _PhotoDetailScreenState extends State<PhotoDetailScreen> {
 
        if (mounted) {
          setState(() {
-           _faceNames = newMap;
+           _facePersons = newMap;
          });
        }
     } catch (e) {
-      safePrint('Error loading face names: $e');
+      safePrint('Error loading face data: $e');
     }
   }
 
@@ -92,71 +90,128 @@ class _PhotoDetailScreenState extends State<PhotoDetailScreen> {
   }
 
   Future<void> _handleFaceTap(String faceId, String? existingName, Map<String, dynamic> boundingBox) async {
+    Person? knownPerson = _facePersons[faceId];
+    
+    if (knownPerson != null && knownPerson.isUnnamed != true) {
+        // Already named — just show confirmation
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('This is ${knownPerson.name}')),
+        );
+        return;
+    }
+
+    // Unnamed or unknown — let user name them
     final name = await showDialog<String>(
       context: context,
-      builder: (context) => NameFaceDialog(initialName: existingName),
+      builder: (context) => NameFaceDialog(
+        initialName: "",
+        title: knownPerson != null ? 'Name this person' : 'Who is this?',
+        subtitle: knownPerson != null ? 'This face was auto-grouped. Give it a name.' : null,
+      ),
     );
 
     if (name != null && name.isNotEmpty) {
-       await _savePersonDocs(faceId, name, jsonEncode(boundingBox));
+       await _savePersonDocs([faceId], [widget.photo], name, jsonEncode(boundingBox), existingPerson: knownPerson);
     }
   }
 
-  Future<void> _savePersonDocs(String faceId, String name, String boundingBoxString) async {
+  Future<void> _savePersonDocs(List<String> faceIds, List<Photo> photos, String name, String boundingBoxString, {Person? existingPerson}) async {
     setState(() => _isLoading = true);
     try {
-      // 1. Check if Person exists by name
+      // Check if target name exists
       final request = ModelQueries.list(Person.classType);
       final response = await Amplify.API.query(request: request).response;
-      
-      Person? person;
       final persons = response.data?.items.where((p) => p != null).cast<Person>() ?? [];
       
+      Person? targetPerson;
       try {
-        person = persons.firstWhere((p) => p.name.toLowerCase() == name.toLowerCase());
-      } catch (_) {
-        person = null;
-      }
+        targetPerson = persons.firstWhere((p) => p.name.toLowerCase() == name.toLowerCase());
+      } catch (_) {}
 
-      if (person != null) {
-        if (person.faceIds == null || !person.faceIds!.contains(faceId)) {
-          final List<String> updatedFaceIds = [...(person.faceIds ?? []), faceId];
-          // Determine if we should update the thumbnail/boundingBox to this new face if the current one is broken?
-          // For now, keep the original unless it's null.
-          final updatedPerson = person.copyWith(
-            faceIds: updatedFaceIds,
-            boundingBox: person.boundingBox ?? boundingBoxString,
-            thumbnailS3Key: person.thumbnailS3Key ?? widget.photo.s3Key,
-          );
-          await Amplify.API.mutate(request: ModelMutations.update(updatedPerson)).response;
-          safePrint('Updated Person ${person.name} with new faceId');
-        }
+      // LOGIC:
+      // 1. If existingPerson (Source) is Unnamed:
+      //    a. If targetPerson (Target) exists: MERGE Source -> Target.
+      //    b. If targetPerson does not exist: RENAME Source -> Name.
+      // 2. If existingPerson is null (New):
+      //    a. If targetPerson exists: ADD faces to Target.
+      //    b. If targetPerson does not exist: CREATE new Person.
+
+      if (existingPerson != null && existingPerson.isUnnamed == true) {
+         // Case 1: Renaming/Merging an Unnamed Person
+         if (targetPerson != null) {
+            // 1a. Merge
+            safePrint("Merging ${existingPerson.name} into ${targetPerson.name}");
+            
+            // Move faces
+            final combinedFaces = {...(targetPerson.faceIds ?? []), ...(existingPerson.faceIds ?? []), ...faceIds}.toList();
+            
+            // Move Photo links
+            // We need to find all PhotoPerson links for existingPerson and update them to targetPerson
+            final linksReq = ModelQueries.list(PhotoPerson.classType, where: PhotoPerson.PERSONID.eq(existingPerson.id));
+            final linksRes = await Amplify.API.query(request: linksReq).response;
+            final links = linksRes.data?.items.whereType<PhotoPerson>().toList() ?? [];
+            
+            for (var link in links) {
+                // Delete old, create new (cannot update PK fields usually, or relationship fields might be restricted)
+                // Actually PhotoPerson IDs are independent. We can probably just update personId?
+                // Amplify Gen 2: fields are immutable if they are PK. PhotoPerson ID is primary. personId is not PK, but it is a connection.
+                // Safest: Delete and Create.
+                await Amplify.API.mutate(request: ModelMutations.delete(link));
+                await Amplify.API.mutate(request: ModelMutations.create(
+                    PhotoPerson(photoId: link.photoId, personId: targetPerson.id)
+                ));
+            }
+            
+            // Update Target
+            await Amplify.API.mutate(request: ModelMutations.update(targetPerson.copyWith(faceIds: combinedFaces)));
+            
+            // Delete Source
+            await Amplify.API.mutate(request: ModelMutations.delete(existingPerson));
+            
+            if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Merged into ${targetPerson.name}')));
+            
+         } else {
+           // 1b. Rename
+           final updated = existingPerson.copyWith(name: name, isUnnamed: false);
+           await Amplify.API.mutate(request: ModelMutations.update(updated));
+           if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Renamed to $name')));
+         }
       } else {
-        person = Person(
-          name: name,
-          faceId: faceId,
-          faceIds: [faceId],
-          boundingBox: boundingBoxString,
-          thumbnailS3Key: widget.photo.s3Key,
-        );
-        final createRes = await Amplify.API.mutate(request: ModelMutations.create(person)).response;
-        person = createRes.data;
-        safePrint('Created Person ${person?.name}');
+         // Case 2: Standard matching
+         if (targetPerson != null) {
+            // 2a. Update existing
+            final currentFaceIds = targetPerson.faceIds ?? [];
+            final newFaceIds = {...currentFaceIds, ...faceIds}.toList();
+            if (newFaceIds.length > currentFaceIds.length) {
+                await Amplify.API.mutate(request: ModelMutations.update(targetPerson.copyWith(faceIds: newFaceIds)));
+            }
+         } else {
+             // 2b. Create new
+            targetPerson = Person(
+                name: name,
+                faceId: faceIds.first,
+                faceIds: faceIds,
+                boundingBox: boundingBoxString,
+                thumbnailS3Key: photos.first.s3Key,
+            );
+            final res = await Amplify.API.mutate(request: ModelMutations.create(targetPerson)).response;
+            targetPerson = res.data;
+         }
+         
+         // Link photos (if not already linked)
+         if (targetPerson != null) {
+            for (var photo in photos) {
+                 final link = PhotoPerson(photoId: photo.id, personId: targetPerson!.id);
+                 try {
+                     await Amplify.API.mutate(request: ModelMutations.create(link));
+                 } catch (_) {}
+            }
+            if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Tagged ${photos.length} photos')));
+         }
       }
 
-      if (person != null) {
-        final link = PhotoPerson(
-          photoId: widget.photo.id,
-          personId: person.id,
-        );
-        await Amplify.API.mutate(request: ModelMutations.create(link)).response;
-        
-        if (mounted) {
-           ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Tagged as ${person.name}')));
-           _loadFaceNames(); 
-        }
-      }
-      
+      if (mounted) _loadFaceData(); // Refresh
+
     } catch (e) {
       safePrint('Error saving person: $e');
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
@@ -287,7 +342,7 @@ class _PhotoDetailScreenState extends State<PhotoDetailScreen> {
                              final face = jsonDecode(widget.photo.detectedFaces![index]);
                              final faceId = face['faceId'] as String;
                              final box = face['boundingBox'];
-                             final personName = _faceNames[faceId];
+                             final personName = _facePersons[faceId]?.name;
                              
                              return FaceAvatar(
                                imageUrl: _imageUrl!,
