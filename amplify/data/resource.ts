@@ -6,6 +6,7 @@ const schema = a.schema({
 			s3Key: a.string().required(),
 			faceIds: a.string().array(),
 			detectedText: a.string().array(),
+			detectedFaces: a.json().array(),
 			facesCount: a.integer().default(0),
 			analyzedAt: a.datetime(),
 		})

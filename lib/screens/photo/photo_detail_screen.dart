@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:amplify_flutter/amplify_flutter.dart';
 import 'package:amplify_api/amplify_api.dart';
@@ -116,28 +117,80 @@ class _PhotoDetailScreenState extends State<PhotoDetailScreen> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             // Photo
+            // Photo with Bounding Boxes
             AspectRatio(
               aspectRatio: 1,
-              child: _isLoading
-                  ? Center(child: CircularProgressIndicator(color: colorScheme.primary))
-                  : _imageUrl != null
-                      ? Image.network(
-                          _imageUrl!,
-                          fit: BoxFit.contain,
-                          errorBuilder: (context, error, stackTrace) => Center(
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(Icons.broken_image_outlined, size: 64, color: colorScheme.onSurfaceVariant),
-                                const SizedBox(height: 8),
-                                Text('Failed to load image', style: TextStyle(color: colorScheme.onSurfaceVariant)),
-                              ],
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                   _isLoading
+                      ? Center(child: CircularProgressIndicator(color: colorScheme.primary))
+                      : _imageUrl != null
+                          ? Image.network(
+                              _imageUrl!,
+                              fit: BoxFit.contain,
+                              errorBuilder: (context, error, stackTrace) => Center(
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(Icons.broken_image_outlined, size: 64, color: colorScheme.onSurfaceVariant),
+                                    const SizedBox(height: 8),
+                                    Text('Failed to load image', style: TextStyle(color: colorScheme.onSurfaceVariant)),
+                                  ],
+                                ),
+                              ),
+                            )
+                          : Center(
+                              child: Icon(Icons.image_not_supported_outlined, size: 64, color: colorScheme.onSurfaceVariant),
                             ),
-                          ),
-                        )
-                      : Center(
-                          child: Icon(Icons.image_not_supported_outlined, size: 64, color: colorScheme.onSurfaceVariant),
-                        ),
+                   
+                   // Bounding Boxes Overlay
+                   // We use LayoutBuilder here to get the size of the Stack (which matches AspectRatio)
+                   if (!_isLoading && _imageUrl != null && widget.photo.detectedFaces != null)
+                     LayoutBuilder(
+                       builder: (context, constraints) {
+                          return Stack(
+                            children: [
+                              ...widget.photo.detectedFaces!.map((faceJson) {
+                                 try {
+                                   final Map<String, dynamic> face = jsonDecode(faceJson);
+                                   final box = face['boundingBox'];
+                                   if (box == null) return const SizedBox();
+
+                                   final double width = box['Width']?.toDouble() ?? 0.0;
+                                   final double height = box['Height']?.toDouble() ?? 0.0;
+                                   final double left = box['Left']?.toDouble() ?? 0.0;
+                                   final double top = box['Top']?.toDouble() ?? 0.0;
+                                   
+                                   return Positioned(
+                                     left: left * constraints.maxWidth,
+                                     top: top * constraints.maxHeight,
+                                     width: width * constraints.maxWidth,
+                                     height: height * constraints.maxHeight,
+                                     child: GestureDetector(
+                                       onTap: () {
+                                         ScaffoldMessenger.of(context).showSnackBar(
+                                           const SnackBar(content: Text('Tapped a face! Naming coming soon.')),
+                                         );
+                                       },
+                                       child: Container(
+                                         decoration: BoxDecoration(
+                                           border: Border.all(color: Colors.white, width: 2),
+                                           borderRadius: BorderRadius.circular(4),
+                                         ),
+                                       ),
+                                     ),
+                                   );
+                                 } catch(e) {
+                                   return const SizedBox();
+                                 }
+                              }),
+                            ]
+                          );
+                       }
+                     ),
+                ],
+              ),
             ),
 
             // Analysis results

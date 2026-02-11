@@ -13,8 +13,8 @@ class SignInScreen extends StatefulWidget {
 
 class _SignInScreenState extends State<SignInScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _emailController = TextEditingController();
-  final _passwordController = TextEditingController();
+  final _emailController = TextEditingController(text: 'demo@example.com');
+  final _passwordController = TextEditingController(text: 'test_password_123');
   bool _isLoading = false;
   bool _obscurePassword = true;
 

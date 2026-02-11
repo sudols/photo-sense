@@ -17,6 +17,11 @@ class AuthService {
         throw Exception('Sign in failed');
       }
     } on AuthException catch (e) {
+      if (e.message.contains('already a user signed in')) {
+        // If a user is already signed in, just return the current user
+        final user = await Amplify.Auth.getCurrentUser();
+        return user;
+      }
       throw Exception(e.message);
     }
   }

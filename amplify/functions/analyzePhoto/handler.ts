@@ -29,6 +29,7 @@ interface AnalyzePhotoResult {
 	faceIds: string[];
 	facesCount: number;
 	detectedText: string[];
+	detectedFaces: any[];
 }
 
 // ... helper functions ...
@@ -59,6 +60,7 @@ export const handler = async (event: any): Promise<void> => {
 			const result: AnalyzePhotoResult = {
 				faceIds: faceResult.faceIds,
 				facesCount: faceResult.facesCount,
+				detectedFaces: faceResult.detectedFaces,
 				detectedText,
 			};
 
@@ -79,11 +81,12 @@ export const handler = async (event: any): Promise<void> => {
 							TableName: PHOTO_TABLE_NAME,
 							Key: { id: photoId },
 							UpdateExpression:
-								'SET facesCount = :fc, detectedText = :dt, faceIds = :fi, analyzedAt = :at',
+								'SET facesCount = :fc, detectedText = :dt, faceIds = :fi, detectedFaces = :df, analyzedAt = :at',
 							ExpressionAttributeValues: {
 								':fc': result.facesCount,
 								':dt': result.detectedText,
 								':fi': result.faceIds,
+								':df': result.detectedFaces,
 								':at': new Date().toISOString(),
 							},
 						}),
@@ -128,7 +131,7 @@ async function ensureCollection(): Promise<void> {
 async function indexFaces(
 	bucketName: string,
 	s3Key: string,
-): Promise<{ faceIds: string[]; facesCount: number }> {
+): Promise<{ faceIds: string[]; facesCount: number; detectedFaces: any[] }> {
 	try {
 		const response = await rekognition.send(
 			new IndexFacesCommand({
@@ -144,18 +147,30 @@ async function indexFaces(
 			}),
 		);
 
-		const faceIds =
-			response.FaceRecords?.map((record) => record.Face?.FaceId || '').filter(
-				(id) => id !== '',
-			) || [];
+		const faceIds: string[] = [];
+		const detectedFaces: any[] = [];
+
+		if (response.FaceRecords) {
+			for (const record of response.FaceRecords) {
+				if (record.Face?.FaceId) {
+					faceIds.push(record.Face.FaceId);
+					detectedFaces.push({
+						faceId: record.Face.FaceId,
+						boundingBox: record.Face.BoundingBox,
+						confidence: record.Face.Confidence,
+					});
+				}
+			}
+		}
 
 		return {
 			faceIds,
 			facesCount: faceIds.length,
+			detectedFaces,
 		};
 	} catch (error) {
 		console.error('Error indexing faces:', error);
-		return { faceIds: [], facesCount: 0 };
+		return { faceIds: [], facesCount: 0, detectedFaces: [] };
 	}
 }
 

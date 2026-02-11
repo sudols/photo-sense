@@ -13,6 +13,7 @@ class Photo extends amplify_core.Model {
   final String id;
   final String? _s3Key;
   final List<String>? _faceIds;
+  final List<String>? _detectedFaces;
   final List<String>? _detectedText;
   final int? _facesCount;
   final amplify_core.TemporalDateTime? _analyzedAt;
@@ -49,6 +50,10 @@ class Photo extends amplify_core.Model {
     return _faceIds;
   }
   
+  List<String>? get detectedFaces {
+    return _detectedFaces;
+  }
+  
   List<String>? get detectedText {
     return _detectedText;
   }
@@ -69,13 +74,14 @@ class Photo extends amplify_core.Model {
     return _updatedAt;
   }
   
-  const Photo._internal({required this.id, required s3Key, faceIds, detectedText, facesCount, analyzedAt, createdAt, updatedAt}): _s3Key = s3Key, _faceIds = faceIds, _detectedText = detectedText, _facesCount = facesCount, _analyzedAt = analyzedAt, _createdAt = createdAt, _updatedAt = updatedAt;
+  const Photo._internal({required this.id, required s3Key, faceIds, detectedFaces, detectedText, facesCount, analyzedAt, createdAt, updatedAt}): _s3Key = s3Key, _faceIds = faceIds, _detectedFaces = detectedFaces, _detectedText = detectedText, _facesCount = facesCount, _analyzedAt = analyzedAt, _createdAt = createdAt, _updatedAt = updatedAt;
   
-  factory Photo({String? id, required String s3Key, List<String>? faceIds, List<String>? detectedText, int? facesCount, amplify_core.TemporalDateTime? analyzedAt}) {
+  factory Photo({String? id, required String s3Key, List<String>? faceIds, List<String>? detectedFaces, List<String>? detectedText, int? facesCount, amplify_core.TemporalDateTime? analyzedAt}) {
     return Photo._internal(
       id: id == null ? amplify_core.UUID.getUUID() : id,
       s3Key: s3Key,
       faceIds: faceIds != null ? List<String>.unmodifiable(faceIds) : faceIds,
+      detectedFaces: detectedFaces != null ? List<String>.unmodifiable(detectedFaces) : detectedFaces,
       detectedText: detectedText != null ? List<String>.unmodifiable(detectedText) : detectedText,
       facesCount: facesCount,
       analyzedAt: analyzedAt);
@@ -92,6 +98,7 @@ class Photo extends amplify_core.Model {
       id == other.id &&
       _s3Key == other._s3Key &&
       DeepCollectionEquality().equals(_faceIds, other._faceIds) &&
+      DeepCollectionEquality().equals(_detectedFaces, other._detectedFaces) &&
       DeepCollectionEquality().equals(_detectedText, other._detectedText) &&
       _facesCount == other._facesCount &&
       _analyzedAt == other._analyzedAt;
@@ -107,9 +114,10 @@ class Photo extends amplify_core.Model {
     buffer.write("Photo {");
     buffer.write("id=" + "$id" + ", ");
     buffer.write("s3Key=" + "$_s3Key" + ", ");
-    buffer.write("faceIds=" + (_faceIds != null ? _faceIds!.toString() : "null") + ", ");
-    buffer.write("detectedText=" + (_detectedText != null ? _detectedText!.toString() : "null") + ", ");
-    buffer.write("facesCount=" + (_facesCount != null ? _facesCount!.toString() : "null") + ", ");
+    buffer.write("faceIds=" + (_faceIds != null ? _faceIds.toString() : "null") + ", ");
+    buffer.write("detectedFaces=" + (_detectedFaces != null ? _detectedFaces.toString() : "null") + ", ");
+    buffer.write("detectedText=" + (_detectedText != null ? _detectedText.toString() : "null") + ", ");
+    buffer.write("facesCount=" + (_facesCount != null ? _facesCount.toString() : "null") + ", ");
     buffer.write("analyzedAt=" + (_analyzedAt != null ? _analyzedAt!.format() : "null") + ", ");
     buffer.write("createdAt=" + (_createdAt != null ? _createdAt!.format() : "null") + ", ");
     buffer.write("updatedAt=" + (_updatedAt != null ? _updatedAt!.format() : "null"));
@@ -118,11 +126,12 @@ class Photo extends amplify_core.Model {
     return buffer.toString();
   }
   
-  Photo copyWith({String? s3Key, List<String>? faceIds, List<String>? detectedText, int? facesCount, amplify_core.TemporalDateTime? analyzedAt}) {
+  Photo copyWith({String? s3Key, List<String>? faceIds, List<String>? detectedFaces, List<String>? detectedText, int? facesCount, amplify_core.TemporalDateTime? analyzedAt}) {
     return Photo._internal(
       id: id,
       s3Key: s3Key ?? this.s3Key,
       faceIds: faceIds ?? this.faceIds,
+      detectedFaces: detectedFaces ?? this.detectedFaces,
       detectedText: detectedText ?? this.detectedText,
       facesCount: facesCount ?? this.facesCount,
       analyzedAt: analyzedAt ?? this.analyzedAt);
@@ -132,6 +141,7 @@ class Photo extends amplify_core.Model {
     : id = json['id'],
       _s3Key = json['s3Key'],
       _faceIds = json['faceIds']?.cast<String>(),
+      _detectedFaces = json['detectedFaces']?.cast<String>(),
       _detectedText = json['detectedText']?.cast<String>(),
       _facesCount = (json['facesCount'] as num?)?.toInt(),
       _analyzedAt = json['analyzedAt'] != null ? amplify_core.TemporalDateTime.fromString(json['analyzedAt']) : null,
@@ -139,13 +149,14 @@ class Photo extends amplify_core.Model {
       _updatedAt = json['updatedAt'] != null ? amplify_core.TemporalDateTime.fromString(json['updatedAt']) : null;
   
   Map<String, dynamic> toJson() => {
-    'id': id, 's3Key': _s3Key, 'faceIds': _faceIds, 'detectedText': _detectedText, 'facesCount': _facesCount, 'analyzedAt': _analyzedAt?.format(), 'createdAt': _createdAt?.format(), 'updatedAt': _updatedAt?.format()
+    'id': id, 's3Key': _s3Key, 'faceIds': _faceIds, 'detectedFaces': _detectedFaces, 'detectedText': _detectedText, 'facesCount': _facesCount, 'analyzedAt': _analyzedAt?.format(), 'createdAt': _createdAt?.format(), 'updatedAt': _updatedAt?.format()
   };
   
   Map<String, Object?> toMap() => {
     'id': id,
     's3Key': _s3Key,
     'faceIds': _faceIds,
+    'detectedFaces': _detectedFaces,
     'detectedText': _detectedText,
     'facesCount': _facesCount,
     'analyzedAt': _analyzedAt,
@@ -157,6 +168,7 @@ class Photo extends amplify_core.Model {
   static final ID = amplify_core.QueryField(fieldName: "id");
   static final S3KEY = amplify_core.QueryField(fieldName: "s3Key");
   static final FACEIDS = amplify_core.QueryField(fieldName: "faceIds");
+  static final DETECTEDFACES = amplify_core.QueryField(fieldName: "detectedFaces");
   static final DETECTEDTEXT = amplify_core.QueryField(fieldName: "detectedText");
   static final FACESCOUNT = amplify_core.QueryField(fieldName: "facesCount");
   static final ANALYZEDAT = amplify_core.QueryField(fieldName: "analyzedAt");
@@ -188,6 +200,13 @@ class Photo extends amplify_core.Model {
     
     modelSchemaDefinition.addField(amplify_core.ModelFieldDefinition.field(
       key: Photo.FACEIDS,
+      isRequired: false,
+      isArray: true,
+      ofType: amplify_core.ModelFieldType(amplify_core.ModelFieldTypeEnum.collection, ofModelName: amplify_core.ModelFieldTypeEnum.string.name)
+    ));
+    
+    modelSchemaDefinition.addField(amplify_core.ModelFieldDefinition.field(
+      key: Photo.DETECTEDFACES,
       isRequired: false,
       isArray: true,
       ofType: amplify_core.ModelFieldType(amplify_core.ModelFieldTypeEnum.collection, ofModelName: amplify_core.ModelFieldTypeEnum.string.name)
