@@ -152,7 +152,7 @@ class _PeopleScreenState extends State<PeopleScreen> {
                              separatorBuilder: (context, index) => const SizedBox(width: 16),
                              itemBuilder: (context, index) => SizedBox(
                                width: 100, // Fixed width for item
-                               child: _buildPersonItem(unnamedPeople[index]),
+                               child: _buildPersonItem(unnamedPeople[index], showName: false),
                              ),
                            ),
                          ),
@@ -190,7 +190,7 @@ class _PeopleScreenState extends State<PeopleScreen> {
     );
   }
 
-  Widget _buildPersonItem(Person person) {
+  Widget _buildPersonItem(Person person, {bool showName = true}) {
     final imageUrl = _thumbnailUrls[person.id];
     Map<String, dynamic> box = {};
     
@@ -210,48 +210,51 @@ class _PeopleScreenState extends State<PeopleScreen> {
       child: Column(
         children: [
           Expanded(
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                imageUrl != null && box.isNotEmpty
-                    ? FaceAvatar( // Use FaceAvatar if we have box
-                        imageUrl: imageUrl,
-                        boundingBox: box,
-                        size: 100, 
-                        showLabel: false,
-                      )
-                    : CircleAvatar( // Fallback
-                        radius: 40,
-                        backgroundImage: imageUrl != null ? NetworkImage(imageUrl) : null,
-                        child: imageUrl == null ? const Icon(Icons.person, size: 40) : null,
+            child: Center(
+              child: Stack(
+                children: [
+                  imageUrl != null && box.isNotEmpty
+                      ? FaceAvatar( // Use FaceAvatar if we have box
+                          imageUrl: imageUrl,
+                          boundingBox: box,
+                          size: 100, 
+                          showLabel: false,
+                        )
+                      : CircleAvatar( // Fallback
+                          radius: 40,
+                          backgroundImage: imageUrl != null ? NetworkImage(imageUrl) : null,
+                          child: imageUrl == null ? const Icon(Icons.person, size: 40) : null,
+                        ),
+                  if (person.isUnnamed == true)
+                    Positioned(
+                      right: 0,
+                      bottom: 0,
+                      child: Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: const BoxDecoration(
+                          color: Colors.blue, // Theme primary? or blue/green
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.add, size: 16, color: Colors.white),
                       ),
-                if (person.isUnnamed == true)
-                  Positioned(
-                    right: 0,
-                    bottom: 0,
-                    child: Container(
-                      padding: const EdgeInsets.all(4),
-                      decoration: const BoxDecoration(
-                        color: Colors.blue, // Theme primary? or blue/green
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(Icons.add, size: 16, color: Colors.white),
                     ),
-                  ),
-              ],
+                ],
+              ),
             ),
           ),
-          const SizedBox(height: 8),
-          Text(
-            person.name,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              fontWeight: person.isUnnamed == true ? FontWeight.normal : FontWeight.bold,
-              fontStyle: person.isUnnamed == true ? FontStyle.italic : FontStyle.normal,
+          if (showName) ...[
+            const SizedBox(height: 8),
+            Text(
+              person.name,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                fontWeight: person.isUnnamed == true ? FontWeight.normal : FontWeight.bold,
+                fontStyle: person.isUnnamed == true ? FontStyle.italic : FontStyle.normal,
+              ),
+              textAlign: TextAlign.center,
+              overflow: TextOverflow.ellipsis,
+              maxLines: 1,
             ),
-            textAlign: TextAlign.center,
-            overflow: TextOverflow.ellipsis,
-            maxLines: 1,
-          ),
+          ],
         ],
       ),
     );
