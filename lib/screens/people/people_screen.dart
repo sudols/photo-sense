@@ -137,28 +137,27 @@ class _PeopleScreenState extends State<PeopleScreen> {
                   else ...[
                     if (unnamedPeople.isNotEmpty) ...[
                        SliverPadding(
-                         padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                         padding: const EdgeInsets.only(top: 16, bottom: 8, left: 16),
                          sliver: SliverToBoxAdapter(
-                           child: Text("New Faces", style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
+                           child: Text("Who's this?", style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
                          ),
                        ),
-                       SliverPadding(
-                         padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-                         sliver: SliverGrid(
-                           gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                              crossAxisCount: 3,
-                              crossAxisSpacing: 16,
-                              mainAxisSpacing: 16,
-                              childAspectRatio: 0.8,
-                           ),
-                           delegate: SliverChildBuilderDelegate(
-                             (context, index) => _buildPersonItem(unnamedPeople[index]),
-                             childCount: unnamedPeople.length,
+                       SliverToBoxAdapter(
+                         child: SizedBox(
+                           height: 140, // Height for avatar + text
+                           child: ListView.separated(
+                             padding: const EdgeInsets.symmetric(horizontal: 16),
+                             scrollDirection: Axis.horizontal,
+                             itemCount: unnamedPeople.length,
+                             separatorBuilder: (context, index) => const SizedBox(width: 16),
+                             itemBuilder: (context, index) => SizedBox(
+                               width: 100, // Fixed width for item
+                               child: _buildPersonItem(unnamedPeople[index]),
+                             ),
                            ),
                          ),
                        ),
-                       const SliverToBoxAdapter(child: SizedBox(height: 16)),
-                       const SliverToBoxAdapter(child: Divider()),
+                       const SliverToBoxAdapter(child: Divider(height: 32)),
                     ],
                     
                     if (namedPeople.isNotEmpty) ...[
