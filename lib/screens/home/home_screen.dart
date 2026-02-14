@@ -3,6 +3,8 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:amplify_flutter/amplify_flutter.dart';
 import 'package:amplify_api/amplify_api.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:flutter_speed_dial/flutter_speed_dial.dart';
 import 'package:uuid/uuid.dart';
 import 'package:flutter_sticky_header/flutter_sticky_header.dart';
 import 'package:intl/intl.dart';
@@ -328,18 +330,134 @@ class _HomeScreenState extends State<HomeScreen> {
         ],
       ),
       floatingActionButton: _currentIndex == 0 
-        ? FloatingActionButton.extended(
-            onPressed: _isUploading ? null : _uploadPhoto,
-            icon: _isUploading
-                ? SizedBox(
-                    width: 20, height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: colorScheme.onPrimaryContainer),
-                  )
-                : const Icon(Icons.add_photo_alternate_outlined),
-            label: Text(_isUploading ? 'Uploading...' : 'Upload Photo'),
+        ? SpeedDial(
+            icon: Icons.add,
+            activeIcon: Icons.close,
+            backgroundColor: colorScheme.primary,
+            foregroundColor: colorScheme.onPrimary,
+            activeBackgroundColor: colorScheme.error,
+            activeForegroundColor: colorScheme.onError,
+            spacing: 12,
+            spaceBetweenChildren: 8,
+            visible: true,
+            curve: Curves.easeIn,
+            overlayColor: Colors.black,
+            overlayOpacity: 0.5,
+            direction: SpeedDialDirection.up,
+            elevation: 8.0,
+            isOpenOnStart: false,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            children: [
+              SpeedDialChild(
+                child: const Icon(Icons.folder_open),
+                backgroundColor: colorScheme.surfaceContainerHighest, 
+                foregroundColor: colorScheme.onSurfaceVariant,
+                label: 'Add folder',
+                labelStyle: TextStyle(fontWeight: FontWeight.w500, color: colorScheme.onSurfaceVariant),
+                labelBackgroundColor: colorScheme.surfaceContainerHighest,
+                onTap: _uploadCollection, 
+              ),
+              SpeedDialChild(
+                child: const Icon(Icons.person_add_alt_1), 
+                backgroundColor: colorScheme.surfaceContainerHighest,
+                foregroundColor: colorScheme.onSurfaceVariant,
+                label: 'Add people', 
+                labelStyle: TextStyle(fontWeight: FontWeight.w500, color: colorScheme.onSurfaceVariant),
+                labelBackgroundColor: colorScheme.surfaceContainerHighest,
+                onTap: _uploadPhoto,
+              ),
+            ],
           )
         : null,
     );
+  }
+
+  Future<void> _uploadCollection() async {
+    try {
+      // Use FilePicker to pick multiple files (simulating collection)
+      // On mobile, picking a directory is tricky due to scoped storage.
+      // So we use pickFiles with allowMultiple: true and type: image.
+      // This is effectively "Select Folder" if the user selects all in a folder.
+      
+      FilePickerResult? result = await FilePicker.platform.pickFiles(
+        allowMultiple: true,
+        type: FileType.image,
+      );
+
+      if (result == null || result.files.isEmpty) return;
+
+      setState(() => _isUploading = true);
+      int successCount = 0;
+      int failCount = 0;
+
+      for (final platformFile in result.files) {
+        try {
+           final uuid = const Uuid().v4();
+           final extension = platformFile.extension ?? 'jpg';
+           final path = platformFile.path;
+           final bytes = platformFile.bytes;
+
+           // Determine file input (bytes for web, path for mobile/desktop)
+           final awsFile = kIsWeb && bytes != null
+               ? AWSFile.fromData(bytes)
+               : path != null 
+                   ? AWSFile.fromPath(path) 
+                   : null;
+
+           if (awsFile == null) {
+              safePrint('Skipping ${platformFile.name}: No valid path or bytes');
+              continue;
+           }
+
+           final uploadResult = await Amplify.Storage.uploadFile(
+            localFile: awsFile,
+            path: StoragePath.fromIdentityId(
+              (identityId) => 'photos/$identityId/$uuid.$extension',
+            ),
+           ).result;
+
+           final actualS3Key = uploadResult.uploadedItem.path;
+           
+           final newPhoto = Photo(
+            id: uuid,
+            s3Key: actualS3Key,
+            facesCount: 0,
+            analyzedAt: TemporalDateTime.now(),
+           );
+           
+           final createResponse = await Amplify.API.mutate(
+            request: ModelMutations.create(newPhoto)
+           ).response;
+
+           if (createResponse.errors.isNotEmpty) {
+              failCount++;
+           } else {
+              successCount++;
+           }
+        } catch (e) {
+            safePrint('Error uploading ${platformFile.name}: $e');
+            failCount++;
+        }
+      }
+
+      if (mounted) {
+        final msg = failCount > 0 
+          ? 'Uploaded $successCount photos. Failed: $failCount' 
+          : 'Uploaded $successCount photos from collection!';
+          
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(msg),
+            backgroundColor: failCount > 0 ? Colors.orange : Theme.of(context).colorScheme.primary,
+          ),
+        );
+        await _fetchPhotos();
+      }
+    } catch (e) {
+       safePrint('Collection upload error: $e');
+    } finally {
+       if (mounted) setState(() => _isUploading = false);
+    }
   }
 
   Widget _buildEmptyState(ColorScheme colorScheme) {
