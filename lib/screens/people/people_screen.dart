@@ -104,6 +104,11 @@ class _PeopleScreenState extends State<PeopleScreen> {
       }
   }
 
+  Future<void> _handleRefresh() async {
+      await _loadPeople();
+      await _cleanupOrphans();
+  }
+
   @override
   Widget build(BuildContext context) {
     final namedPeople = _people.where((p) => p.isUnnamed != true).toList();
@@ -113,10 +118,16 @@ class _PeopleScreenState extends State<PeopleScreen> {
       appBar: AppBar(title: const Text('People')),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
-          : _people.isEmpty
-              ? const Center(child: Text('No people tagged yet'))
-              : CustomScrollView(
-                  slivers: [
+          : RefreshIndicator(
+              onRefresh: _handleRefresh,
+              child: CustomScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                slivers: [
+                  if (_people.isEmpty)
+                    const SliverFillRemaining(
+                      child: Center(child: Text('No people tagged yet')),
+                    )
+                  else ...[
                     if (unnamedPeople.isNotEmpty) ...[
                        SliverPadding(
                          padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
@@ -166,8 +177,10 @@ class _PeopleScreenState extends State<PeopleScreen> {
                          ),
                        ),
                     ],
-                  ],
-                ),
+                  ]
+                ],
+              ),
+            ),
     );
   }
 
