@@ -3,6 +3,7 @@
 ## 1. Project Overview
 
 PhotoSense is a Flutter-based photo gallery app that lets users:
+
 - Upload photos
 - Automatically detect and identify people using face recognition
 - Automatically extract visible text (OCR) from photos
@@ -18,24 +19,24 @@ This phase is a **small, demo-focused** version of the app that proves the core 
 
 ### 2.1 Features to Implement Now (Short Mock)
 
-- **User Account**
+- [x] **User Account**
   - Simple sign-up/sign-in using AWS Cognito (via Amplify Auth).
-- **Photo Upload**
+- [x] **Photo Upload**
   - Pick photo from local gallery in Flutter.
   - Upload image to an S3 bucket using Amplify Storage. [web:160][web:273]
-- **Backend Analysis**
+- [x] **Backend Analysis**
   - Invoke a REST API backed by AWS Lambda to analyze the uploaded image.
   - Lambda calls Amazon Rekognition:
     - `IndexFaces` to detect and index faces into a Rekognition collection. [web:67][web:22]
     - `DetectText` to extract visible text from the image. [web:152]
-- **Metadata Storage**
+- [x] **Metadata Storage**
   - Store basic metadata for each photo in a database (e.g., AppSync + DynamoDB/GraphQL API):
     - `photoId`
     - `s3Key`
     - `faceIds` (from Rekognition)
     - `detectedText` (list of strings)
     - `createdAt`
-- **UI**
+- [x] **UI**
   - Simple home screen with:
     - Upload button
     - Grid view of all photos (thumbnails via signed S3 URLs)
@@ -44,6 +45,7 @@ This phase is a **small, demo-focused** version of the app that proves the core 
       - Extracted text list
 
 This MVP **does not yet** include:
+
 - Named people (no “John”, “Alice” labels yet)
 - Full People tab
 - Full Search tab
@@ -58,28 +60,29 @@ The future phase turns the MVP into a more complete photo-organizing app with pe
 ### 3.1 Planned Features
 
 - **People Management**
-  - Map Rekognition face IDs to **Person** entities with human-assigned names.
-  - “People” tab listing:
-    - Identified people (with names and photo counts)
-    - Unidentified groups (clusters of faces without names)
+  - [x] Map Rekognition face IDs to **Person** entities with human-assigned names.
+  - [x] “People” tab listing:
+    - [x] Identified people (with names and photo counts)
+    - [x] Unidentified groups (clusters of faces without names)
   - Ability to:
-    - Assign a name to an unidentified person/group
-    - Merge duplicate people
+    - [x] Assign a name to an unidentified person/group
+    - [x] Merge duplicate people
 
 - **Search**
-  - “Search” tab where user can:
-    - Search photos by person name (using Person ↔ Photo links).
-    - Search photos by text content (using `detectedText` stored for each photo).
+  - [x] “Search” tab where user can:
+    - [x] Search photos by person name (using Person ↔ Photo links).
+    - [x] Search photos by text content (using `detectedText` stored for each photo).
 
 - **Manual Tagging & Grouping**
   - From Photos tab:
-    - Manually select multiple photos and link them to a specific Person.
+    - [ ] Manually select multiple photos and link them to a specific Person.
   - Support for viewing all photos for a given Person.
+    - [x] (Implemented in Person Detail Screen)
 
 - **Advanced UX**
-  - Infinite scroll grid for large libraries.
-  - Filters (by date range, has text / has faces / specific person).
-  - Optional folder concepts (logical groupings based on tags, not device file system).
+  - [ ] Infinite scroll grid for large libraries.
+  - [ ] Filters (by date range, has text / has faces / specific person).
+  - [ ] Optional folder concepts (logical groupings based on tags, not device file system).
 
 - **Optional Enhancements**
   - On-device caching to reduce network calls.
@@ -209,3 +212,21 @@ The future phase turns the MVP into a more complete photo-organizing app with pe
    - More advanced auth rules:
      - Per-user isolation of data (owner-based access).
    - Potential future: shared albums between users.
+
+### 6.3 Technical Scalability (Backlog)
+
+1. **Global Secondary Index (GSI) for Face Lookups**
+   - **Problem**: Current `analyzePhoto` Lambda uses `ScanCommand` on `Person` table to find matching faces, which is O(N) complexity and inefficient at scale.
+   - **Solution**: Implement a GSI on `faceId` for O(1) lookups.
+   - **Implementation Plan**:
+     1. Create `Face` model in `amplify/data/resource.ts`:
+        ```typescript
+        Face: a.model({
+        	faceId: a.id().required(),
+        	personId: a.id().required(),
+        	s3Key: a.string().required(),
+        }).secondaryIndexes((index) => [index('faceId')]);
+        ```
+     2. Update `analyzePhoto` Lambda to Query `Face` table first.
+     3. Backfill existing data by iterating all Persons and creating Face records.
+   - **Status**: Deferred for MVP (simplifying codebase).
