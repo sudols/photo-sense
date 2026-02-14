@@ -146,6 +146,145 @@ class _PersonDetailScreenState extends State<PersonDetailScreen> {
     }
   }
 
+  Future<void> _handleMerge() async {
+      // 1. Fetch other people for selection
+      List<Person> allPeople = [];
+      try {
+          final req = ModelQueries.list(Person.classType);
+          final res = await Amplify.API.query(request: req).response;
+          allPeople = res.data?.items.whereType<Person>().where((p) => p.id != _person.id).toList() ?? [];
+      } catch (e) {
+          safePrint("Error fetching people for merge: $e");
+          return;
+      }
+      
+      if (allPeople.isEmpty) {
+          if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No other people to merge with.')));
+          return;
+      }
+      
+      // 2. Show Selection Dialog
+      final Person? targetPerson = await showDialog<Person>(
+          context: context,
+          builder: (context) {
+              List<Person> filtered = List.from(allPeople);
+              return StatefulBuilder(
+                  builder: (context, setState) {
+                      return AlertDialog(
+                          title: const Text('Merge into...'),
+                          content: SizedBox(
+                              width: double.maxFinite,
+                              child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                      TextField(
+                                          decoration: const InputDecoration(
+                                              labelText: 'Search',
+                                              prefixIcon: Icon(Icons.search),
+                                          ),
+                                          onChanged: (val) {
+                                              setState(() {
+                                                  filtered = allPeople.where((p) => p.name.toLowerCase().contains(val.toLowerCase())).toList();
+                                              });
+                                          },
+                                      ),
+                                      const SizedBox(height: 8),
+                                      Flexible(
+                                          child: ListView.builder(
+                                              shrinkWrap: true,
+                                              itemCount: filtered.length,
+                                              itemBuilder: (context, index) {
+                                                  final p = filtered[index];
+                                                  return ListTile(
+                                                      title: Text(p.name),
+                                                      subtitle: p.isUnnamed == true ? const Text('Unnamed') : null,
+                                                      onTap: () => Navigator.pop(context, p),
+                                                  );
+                                              },
+                                          ),
+                                      ),
+                                  ],
+                              ),
+                          ),
+                          actions: [
+                              TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+                          ],
+                      );
+                  }
+              );
+          }
+      );
+      
+      if (targetPerson == null) return;
+      
+      // 3. Confirm Merge
+      final confirm = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+              title: Text('Merge into ${targetPerson.name}?'),
+              content: Text('This will move all photos from "${_person.name}" to "${targetPerson.name}". "${_person.name}" will be deleted. This cannot be undone.'),
+              actions: [
+                  TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+                  FilledButton(
+                      onPressed: () => Navigator.pop(context, true),
+                      child: const Text('Merge'),
+                  ),
+              ],
+          ),
+      );
+      
+      if (confirm != true) return;
+      
+      // 4. Execute Merge
+      setState(() => _isLoading = true);
+      try {
+          // A. Update Target Person FaceIDs
+          final oldFaces = _person.faceIds ?? [];
+          final targetFaces = targetPerson.faceIds ?? [];
+          final newFaces = {...targetFaces, ...oldFaces}.toList();
+          
+          await Amplify.API.mutate(request: ModelMutations.update(targetPerson.copyWith(faceIds: newFaces)));
+          
+          // B. Move Links
+          // Get links for Source
+          final linksReq = ModelQueries.list(PhotoPerson.classType, where: PhotoPerson.PERSONID.eq(_person.id));
+          final linksRes = await Amplify.API.query(request: linksReq).response;
+          final sourceLinks = linksRes.data?.items.whereType<PhotoPerson>().toList() ?? [];
+          
+          // Get links for Target (to avoid duplicates)
+          final targetLinksReq = ModelQueries.list(PhotoPerson.classType, where: PhotoPerson.PERSONID.eq(targetPerson.id));
+          final targetLinksRes = await Amplify.API.query(request: targetLinksReq).response;
+          final targetLinks = targetLinksRes.data?.items.whereType<PhotoPerson>().toList() ?? [];
+          final targetPhotoIds = targetLinks.map((tp) => tp.photoId).toSet();
+          
+          for (var link in sourceLinks) {
+              if (!targetPhotoIds.contains(link.photoId)) {
+                  // Create new link
+                  await Amplify.API.mutate(request: ModelMutations.create(
+                      PhotoPerson(photoId: link.photoId, personId: targetPerson.id)
+                  ));
+              }
+              // Delete old link
+              await Amplify.API.mutate(request: ModelMutations.delete(link));
+          }
+          
+          // C. Delete Source Person
+          await Amplify.API.mutate(request: ModelMutations.delete(_person));
+          
+          if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Merged into ${targetPerson.name}')));
+              Navigator.pop(context); // Return to list
+          }
+          
+      } catch (e) {
+          safePrint("Error merging: $e");
+          if (mounted) {
+              setState(() => _isLoading = false);
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error merging: $e')));
+          }
+      }
+  }
+
   Future<void> _handleRename() async {
       final newName = await showDialog<String>(
         context: context, 
@@ -160,11 +299,70 @@ class _PersonDetailScreenState extends State<PersonDetailScreen> {
           try {
              final req = ModelQueries.list(Person.classType, where: Person.NAME.eq(newName));
              final res = await Amplify.API.query(request: req).response;
-             if (res.data?.items.isNotEmpty ?? false) {
+             final existingPeople = res.data?.items.whereType<Person>().toList() ?? [];
+             
+             if (existingPeople.isNotEmpty) {
+                 final target = existingPeople.first;
+                 // Prompt to merge
                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Person with this name already exists. Merging is not yet supported.'))
-                    );
+                     final doMerge = await showDialog<bool>(
+                         context: context,
+                         builder: (context) => AlertDialog(
+                             title: const Text('Person already exists'),
+                             content: Text('"$newName" already exists. Do you want to merge these photos into "$newName"?'),
+                             actions: [
+                                 TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+                                 FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Merge')),
+                             ],
+                         ),
+                     );
+                     
+                     if (doMerge == true) {
+                         // Reuse merge logic (simplified version or inline)
+                         // For now, let's call a manual merge flow or just replicate logic
+                         // Actually, we can just trigger _handleMerge with pre-selection if we refactor,
+                         // but for simplicity, let's just do the merge here quickly or fail gracefully.
+                         
+                         // Better: Show error and suggest using proper Merge button for safety, 
+                         // OR implement full merge here. Let's do full merge for UX.
+                         
+                        setState(() => _isLoading = true);
+                        try {
+                             final oldFaces = _person.faceIds ?? [];
+                             final targetFaces = target.faceIds ?? [];
+                             final newFaces = {...targetFaces, ...oldFaces}.toList();
+                             
+                             await Amplify.API.mutate(request: ModelMutations.update(target.copyWith(faceIds: newFaces)));
+                             
+                             final linksReq = ModelQueries.list(PhotoPerson.classType, where: PhotoPerson.PERSONID.eq(_person.id));
+                             final linksRes = await Amplify.API.query(request: linksReq).response;
+                             final sourceLinks = linksRes.data?.items.whereType<PhotoPerson>().toList() ?? [];
+                             
+                             final targetLinksReq = ModelQueries.list(PhotoPerson.classType, where: PhotoPerson.PERSONID.eq(target.id));
+                             final targetLinksRes = await Amplify.API.query(request: targetLinksReq).response;
+                             final targetLinks = targetLinksRes.data?.items.whereType<PhotoPerson>().toList() ?? [];
+                             final targetPhotoIds = targetLinks.map((tp) => tp.photoId).toSet();
+                             
+                             for (var link in sourceLinks) {
+                                  if (!targetPhotoIds.contains(link.photoId)) {
+                                      await Amplify.API.mutate(request: ModelMutations.create(
+                                          PhotoPerson(photoId: link.photoId, personId: target.id)
+                                      ));
+                                  }
+                                  await Amplify.API.mutate(request: ModelMutations.delete(link));
+                             }
+                             
+                             await Amplify.API.mutate(request: ModelMutations.delete(_person));
+                             
+                             if (mounted) {
+                                 ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Merged into ${target.name}')));
+                                 Navigator.pop(context);
+                             }
+                        } catch(e) {
+                             safePrint("Error merging: $e");
+                             if (mounted) setState(() => _isLoading = false);
+                        }
+                     }
                  }
                  return;
              }
@@ -221,6 +419,11 @@ class _PersonDetailScreenState extends State<PersonDetailScreen> {
           ],
         ),
         actions: [
+            IconButton(
+                onPressed: _handleMerge, 
+                icon: const Icon(Icons.merge_type),
+                tooltip: 'Merge into another person',
+            ),
             if (_person.isUnnamed == true)
                 TextButton.icon(
                     onPressed: _handleRename,
