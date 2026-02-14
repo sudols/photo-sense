@@ -6,10 +6,12 @@ import 'package:amplify_storage_s3/amplify_storage_s3.dart';
 import '../../models/Person.dart';
 import '../../models/PhotoPerson.dart';
 import '../../widgets/face_avatar.dart';
+import '../../widgets/profile_menu_button.dart';
 import 'person_detail_screen.dart';
 
 class PeopleScreen extends StatefulWidget {
-  const PeopleScreen({super.key});
+  final String? userEmail;
+  const PeopleScreen({super.key, this.userEmail});
 
   @override
   State<PeopleScreen> createState() => _PeopleScreenState();
@@ -115,7 +117,13 @@ class _PeopleScreenState extends State<PeopleScreen> {
     final unnamedPeople = _people.where((p) => p.isUnnamed == true).toList();
 
     return Scaffold(
-      appBar: AppBar(title: const Text('People')),
+      appBar: AppBar(
+          title: const Text('People'),
+          actions: [
+              ProfileMenuButton(userEmail: widget.userEmail),
+              const SizedBox(width: 8),
+          ],
+      ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : RefreshIndicator(

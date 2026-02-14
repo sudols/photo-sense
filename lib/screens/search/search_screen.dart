@@ -5,10 +5,12 @@ import 'package:amplify_storage_s3/amplify_storage_s3.dart';
 import '../../models/Photo.dart';
 import '../../models/Person.dart';
 import '../../models/PhotoPerson.dart';
+import '../../widgets/profile_menu_button.dart';
 import '../photo/photo_detail_screen.dart';
 
 class SearchScreen extends StatefulWidget {
-  const SearchScreen({super.key});
+  final String? userEmail;
+  const SearchScreen({super.key, this.userEmail});
 
   @override
   State<SearchScreen> createState() => _SearchScreenState();
@@ -143,6 +145,8 @@ class _SearchScreenState extends State<SearchScreen> {
             icon: const Icon(Icons.search),
             onPressed: () => _performSearch(_searchController.text),
           ),
+          ProfileMenuButton(userEmail: widget.userEmail),
+          const SizedBox(width: 8),
         ],
       ),
       body: _isSearching

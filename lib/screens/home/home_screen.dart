@@ -7,7 +7,7 @@ import 'package:uuid/uuid.dart';
 import '../../models/Photo.dart';
 import '../../services/auth_service.dart';
 import '../../widgets/photo_grid_item.dart';
-import '../auth/sign_in_screen.dart';
+import '../../widgets/profile_menu_button.dart';
 import '../auth/sign_in_screen.dart';
 import '../photo/photo_detail_screen.dart';
 import '../people/people_screen.dart';
@@ -162,85 +162,13 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  Future<void> _signOut() async {
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Sign Out'),
-        content: const Text('Are you sure you want to sign out?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Sign Out'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirm != true) return;
-
-    await AuthService.signOut();
-    if (mounted) {
-      Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (_) => const SignInScreen()),
-        (route) => false,
-      );
-    }
-  }
-
   int _currentIndex = 0;
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final initials = _userEmail != null ? _userEmail!.substring(0, 1).toUpperCase() : 'U';
 
     return Scaffold(
-      appBar: AppBar(
-        title: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.photo_library_rounded, color: colorScheme.primary, size: 28),
-            const SizedBox(width: 8),
-            const Text('PhotoSense'),
-          ],
-        ),
-        actions: [
-          PopupMenuButton<String>(
-            icon: CircleAvatar(
-              backgroundColor: colorScheme.primaryContainer,
-              child: Text(
-                initials,
-                style: TextStyle(color: colorScheme.onPrimaryContainer, fontWeight: FontWeight.w600),
-              ),
-            ),
-            itemBuilder: (context) => <PopupMenuEntry<String>>[
-              PopupMenuItem<String>(
-                enabled: false,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(_userEmail ?? 'User', style: const TextStyle(fontWeight: FontWeight.w600)),
-                  ],
-                ),
-              ),
-              const PopupMenuDivider(),
-              PopupMenuItem<String>(
-                value: 'signout',
-                onTap: _signOut,
-                child: const Row(
-                  children: [Icon(Icons.logout_outlined), SizedBox(width: 12), Text('Sign Out')],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(width: 8),
-        ],
-      ),
       body: IndexedStack(
         index: _currentIndex,
         children: [
@@ -249,14 +177,62 @@ class _HomeScreenState extends State<HomeScreen> {
               ? const Center(child: CircularProgressIndicator())
               : RefreshIndicator(
                   onRefresh: _fetchPhotos,
-                  child: _photos.isEmpty ? _buildEmptyState(colorScheme) : _buildPhotoGrid(),
+                  child: _photos.isEmpty 
+                      ? CustomScrollView(
+                          slivers: [
+                              SliverAppBar(
+                                  floating: true,
+                                  snap: true,
+                                  actions: [
+                                      ProfileMenuButton(userEmail: _userEmail),
+                                      const SizedBox(width: 8),
+                                  ],
+                              ),
+                              SliverFillRemaining(child: _buildEmptyState(colorScheme)),
+                          ],
+                        )
+                      : CustomScrollView(
+                          slivers: [
+                              SliverAppBar(
+                                  floating: true,
+                                  snap: true,
+                                  actions: [
+                                      ProfileMenuButton(userEmail: _userEmail),
+                                      const SizedBox(width: 8),
+                                  ],
+                              ),
+                              SliverPadding(
+                                  padding: const EdgeInsets.all(16),
+                                  sliver: SliverGrid(
+                                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                                        crossAxisCount: 2, crossAxisSpacing: 12, mainAxisSpacing: 12, childAspectRatio: 1,
+                                      ),
+                                      delegate: SliverChildBuilderDelegate(
+                                          (context, index) {
+                                              final photo = _photos[index];
+                                              return PhotoGridItem(
+                                                  photo: photo,
+                                                  onTap: () async {
+                                                      await Navigator.of(context).push(
+                                                          MaterialPageRoute(builder: (_) => PhotoDetailScreen(photo: photo)),
+                                                      );
+                                                      _fetchPhotos(); // Refresh after returning from detail
+                                                  },
+                                              );
+                                          },
+                                          childCount: _photos.length,
+                                      ),
+                                  ),
+                              ),
+                          ],
+                      ),
                 ),
           
           // Tab 1: Search
-          const SearchScreen(),
+          SearchScreen(userEmail: _userEmail),
 
           // Tab 2: People
-          const PeopleScreen(),
+          PeopleScreen(userEmail: _userEmail),
         ],
       ),
       bottomNavigationBar: NavigationBar(
@@ -311,28 +287,6 @@ class _HomeScreenState extends State<HomeScreen> {
           Text('Upload your first photo to get started', style: TextStyle(color: colorScheme.onSurfaceVariant.withValues(alpha: 0.7))),
         ],
       ),
-    );
-  }
-
-  Widget _buildPhotoGrid() {
-    return GridView.builder(
-      padding: const EdgeInsets.all(16),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2, crossAxisSpacing: 12, mainAxisSpacing: 12, childAspectRatio: 1,
-      ),
-      itemCount: _photos.length,
-      itemBuilder: (context, index) {
-        final photo = _photos[index];
-        return PhotoGridItem(
-          photo: photo,
-          onTap: () async {
-            await Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => PhotoDetailScreen(photo: photo)),
-            );
-            _fetchPhotos(); // Refresh after returning from detail
-          },
-        );
-      },
     );
   }
 }
