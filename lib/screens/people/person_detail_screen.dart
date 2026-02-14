@@ -9,6 +9,7 @@ import '../../models/PhotoPerson.dart';
 import '../photo/photo_detail_screen.dart';
 import '../../widgets/face_avatar.dart';
 import 'name_face_dialog.dart';
+import '../search/search_screen.dart';
 
 class PersonDetailScreen extends StatefulWidget {
   final Person person;
@@ -397,94 +398,187 @@ class _PersonDetailScreenState extends State<PersonDetailScreen> {
         box = jsonDecode(_person.boundingBox!);
       } catch (_) {}
     }
+    
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
 
     return Scaffold(
-      appBar: AppBar(
-        title: Row(
+      body: SafeArea(
+        child: Column(
           children: [
-            if (_thumbnailUrl != null) ...[
-                SizedBox(
-                  width: 32,
-                  height: 32,
+            // Top Bar
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 8.0),
+              child: Row(
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.arrow_back),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                  const Spacer(),
+                  IconButton(
+                    icon: const Icon(Icons.search),
+                    onPressed: () {
+                        Navigator.push(
+                          context, 
+                          MaterialPageRoute(
+                            builder: (_) => const SearchScreen(autofocus: true)
+                          )
+                        );
+                    },
+                  ),
+                  PopupMenuButton<String>(
+                      itemBuilder: (context) => [
+                          const PopupMenuItem(
+                              value: 'refresh',
+                              child: Text('Refresh'),
+                          ),
+                      ],
+                      onSelected: (val) {
+                          if (val == 'refresh') _loadPhotos();
+                      },
+                  ),
+                ],
+              ),
+            ),
+            
+            // Profile Header
+            const SizedBox(height: 16),
+            SizedBox(
+              width: 120,
+              height: 120,
+              child: Container(
+                  decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                          BoxShadow(
+                              color: colorScheme.primary.withOpacity(0.2),
+                              blurRadius: 20,
+                              spreadRadius: 5,
+                          )
+                      ]
+                  ),
                   child: FaceAvatar(
-                    imageUrl: _thumbnailUrl!,
+                    imageUrl: _thumbnailUrl ?? '',
                     boundingBox: box,
-                    size: 32,
+                    size: 120,
                     showLabel: false,
                   ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            
+            // Name
+            Text(
+                _person.name,
+                style: theme.textTheme.headlineMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
                 ),
-               const SizedBox(width: 12),
-            ],
-            Expanded(child: Text(_person.name, overflow: TextOverflow.ellipsis)),
+                textAlign: TextAlign.center,
+            ),
+            
+            // Stats
+            const SizedBox(height: 8),
+            Text(
+                '${_photos.length} photos',
+                style: theme.textTheme.bodyLarge?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                ),
+            ),
+            
+            // Actions
+            const SizedBox(height: 24),
+            Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                    _buildActionButton(
+                        icon: Icons.edit_outlined, 
+                        label: 'Rename', 
+                        onTap: _handleRename
+                    ),
+                    const SizedBox(width: 32),
+                    _buildActionButton(
+                        icon: Icons.merge_type, 
+                        label: 'Merge', 
+                        onTap: _handleMerge
+                    ),
+                ],
+            ),
+            const SizedBox(height: 24),
+            
+            // Photos Grid
+            Expanded(
+              child: _isLoading
+               ? const Center(child: CircularProgressIndicator())
+               : _photos.isEmpty
+                   ? Center(child: Text('No photos found', style: TextStyle(color: colorScheme.onSurfaceVariant)))
+                   : GridView.builder(
+                       padding: const EdgeInsets.symmetric(horizontal: 16),
+                       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                         crossAxisCount: 3,
+                         crossAxisSpacing: 4,
+                         mainAxisSpacing: 4,
+                       ),
+                       itemCount: _photos.length,
+                       itemBuilder: (context, index) {
+                         final photo = _photos[index];
+                         final url = _photoUrls[photo.id];
+                         return GestureDetector(
+                           onTap: () {
+                             Navigator.push(
+                               context,
+                               MaterialPageRoute(builder: (_) => PhotoDetailScreen(photo: photo)),
+                             );
+                           },
+                           child: url != null
+                               ? ClipRRect(
+                                   borderRadius: BorderRadius.circular(12),
+                                   child: Image.network(url, fit: BoxFit.cover),
+                                 )
+                               : Container(
+                                   decoration: BoxDecoration(
+                                     color: Colors.grey[200],
+                                     borderRadius: BorderRadius.circular(12),
+                                   ),
+                                   child: const Center(child: Icon(Icons.image)),
+                                 ),
+                         );
+                       },
+                     ),
+            ),
           ],
         ),
-        actions: [
-            IconButton(
-                onPressed: _handleMerge, 
-                icon: const Icon(Icons.merge_type),
-                tooltip: 'Merge into another person',
-            ),
-            if (_person.isUnnamed == true)
-                TextButton.icon(
-                    onPressed: _handleRename,
-                    icon: const Icon(Icons.edit),
-                    label: const Text('Name'),
-                )
-        ],
-      ),
-      body: Column(
-        children: [
-           if (_person.isUnnamed == true)
-             Container(
-                 width: double.infinity,
-                 color: Theme.of(context).colorScheme.primaryContainer,
-                 padding: const EdgeInsets.all(12),
-                 child: Column(
-                     children: [
-                         const Text("These photos were automatically grouped."),
-                         const SizedBox(height: 8),
-                         FilledButton(
-                             onPressed: _handleRename,
-                             child: const Text("Name This Person"),
-                         )
-                     ],
-                 ),
-             ),
-           Expanded(
-             child: _isLoading
-              ? const Center(child: CircularProgressIndicator())
-              : _photos.isEmpty
-                  ? const Center(child: Text('No photos found for this person'))
-                  : GridView.builder(
-                      padding: const EdgeInsets.all(8),
-                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: 3,
-                        crossAxisSpacing: 4,
-                        mainAxisSpacing: 4,
-                      ),
-                      itemCount: _photos.length,
-                      itemBuilder: (context, index) {
-                        final photo = _photos[index];
-                        final url = _photoUrls[photo.id];
-                        return GestureDetector(
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(builder: (_) => PhotoDetailScreen(photo: photo)),
-                            );
-                          },
-                          child: url != null
-                              ? Image.network(url, fit: BoxFit.cover)
-                              : Container(
-                                  color: Colors.grey[200],
-                                  child: const Center(child: Icon(Icons.image)),
-                                ),
-                        );
-                      },
-                    ),
-           ),
-        ],
       ),
     );
+  }
+
+  Widget _buildActionButton({required IconData icon, required String label, required VoidCallback onTap}) {
+      final colorScheme = Theme.of(context).colorScheme;
+      return Column(
+          children: [
+              InkWell(
+                  onTap: onTap,
+                  borderRadius: BorderRadius.circular(30),
+                  child: Container(
+                      width: 50,
+                      height: 50,
+                      decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: colorScheme.surfaceContainerHighest,
+                      ),
+                      child: Icon(icon, color: colorScheme.onSurfaceVariant),
+                  ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                  label,
+                  style: TextStyle(
+                      fontSize: 12,
+                      color: colorScheme.onSurfaceVariant,
+                      fontWeight: FontWeight.w500,
+                  ),
+              ),
+          ],
+      );
   }
 }

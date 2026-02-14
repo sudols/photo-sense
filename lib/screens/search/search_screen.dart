@@ -10,7 +10,13 @@ import '../photo/photo_detail_screen.dart';
 
 class SearchScreen extends StatefulWidget {
   final String? userEmail;
-  const SearchScreen({super.key, this.userEmail});
+  final bool autofocus;
+  
+  const SearchScreen({
+    super.key, 
+    this.userEmail,
+    this.autofocus = false,
+  });
 
   @override
   State<SearchScreen> createState() => _SearchScreenState();
@@ -135,6 +141,7 @@ class _SearchScreenState extends State<SearchScreen> {
               padding: const EdgeInsets.all(16.0),
               child: SearchBar(
                 controller: _searchController,
+                autoFocus: widget.autofocus,
                 hintText: 'Search photos, people, text...',
                 leading: const Icon(Icons.search),
                 trailing: [
