@@ -50,68 +50,63 @@ class _PhotoGridItemState extends State<PhotoGridItem> {
 
     return GestureDetector(
       onTap: widget.onTap,
-      child: Card(
-        clipBehavior: Clip.antiAlias,
-        elevation: 2,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            // Image
-            if (_isLoading)
-              Center(
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: colorScheme.primary,
-                ),
-              )
-            else if (_imageUrl != null)
-              Image.network(
-                _imageUrl!,
-                fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) => Center(
-                  child: Icon(Icons.broken_image_outlined, color: colorScheme.onSurfaceVariant, size: 40),
-                ),
-              )
-            else
-              Center(
-                child: Icon(Icons.image_not_supported_outlined, color: colorScheme.onSurfaceVariant, size: 40),
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          // Image
+          if (_isLoading)
+            Center(
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: colorScheme.primary,
               ),
+            )
+          else if (_imageUrl != null)
+            Image.network(
+              _imageUrl!,
+              fit: BoxFit.cover,
+              errorBuilder: (context, error, stackTrace) => Center(
+                child: Icon(Icons.broken_image_outlined, color: colorScheme.onSurfaceVariant, size: 40),
+              ),
+            )
+          else
+            Center(
+              child: Icon(Icons.image_not_supported_outlined, color: colorScheme.onSurfaceVariant, size: 40),
+            ),
 
-            // Bottom overlay with info
-            Positioned(
-              bottom: 0,
-              left: 0,
-              right: 0,
-              child: Container(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [Colors.transparent, Colors.black.withValues(alpha: 0.7)],
-                  ),
+          // Bottom overlay with info
+          Positioned(
+            bottom: 0,
+            left: 0,
+            right: 0,
+            child: Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [Colors.transparent, Colors.black.withValues(alpha: 0.7)],
                 ),
-                padding: const EdgeInsets.all(8),
-                child: Row(
-                  children: [
-                    if (widget.photo.facesCount != null && widget.photo.facesCount! > 0) ...[
-                      const Icon(Icons.face, color: Colors.white, size: 14),
-                      const SizedBox(width: 4),
-                      Text(
-                        '${widget.photo.facesCount}',
-                        style: const TextStyle(color: Colors.white, fontSize: 12),
-                      ),
-                      const SizedBox(width: 8),
-                    ],
-                    if (widget.photo.detectedText != null && widget.photo.detectedText!.isNotEmpty) ...[
-                      const Icon(Icons.text_fields, color: Colors.white, size: 14),
-                    ],
+              ),
+              padding: const EdgeInsets.all(4), // Reduced padding
+              child: Row(
+                children: [
+                  if (widget.photo.facesCount != null && widget.photo.facesCount! > 0) ...[
+                    const Icon(Icons.face, color: Colors.white, size: 12),
+                    const SizedBox(width: 4),
+                    Text(
+                      '${widget.photo.facesCount}',
+                      style: const TextStyle(color: Colors.white, fontSize: 10),
+                    ),
+                    const SizedBox(width: 8),
                   ],
-                ),
+                  if (widget.photo.detectedText != null && widget.photo.detectedText!.isNotEmpty) ...[
+                    const Icon(Icons.text_fields, color: Colors.white, size: 12),
+                  ],
+                ],
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

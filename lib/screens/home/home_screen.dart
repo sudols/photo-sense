@@ -4,6 +4,8 @@ import 'package:amplify_flutter/amplify_flutter.dart';
 import 'package:amplify_api/amplify_api.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:uuid/uuid.dart';
+import 'package:flutter_sticky_header/flutter_sticky_header.dart';
+import 'package:intl/intl.dart';
 import '../../models/Photo.dart';
 import '../../services/auth_service.dart';
 import '../../widgets/photo_grid_item.dart';
@@ -26,6 +28,10 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _isLoading = true;
   List<Photo> _photos = [];
   String? _userEmail;
+
+  // Grouped photos: Map<DateString, List<Photo>>
+  Map<String, List<Photo>> _groupedPhotos = {};
+  List<String> _sortedDates = [];
 
   @override
   void initState() {
@@ -65,19 +71,54 @@ class _HomeScreenState extends State<HomeScreen> {
       final response = await Amplify.API.query(request: request).response;
 
       if (response.data != null) {
-        setState(() {
-          _photos = response.data!.items.whereType<Photo>().toList();
-          _photos.sort((a, b) {
+        final photos = response.data!.items.whereType<Photo>().toList();
+        // Sort by creation date descending
+        photos.sort((a, b) {
             final aTime = a.createdAt?.getDateTimeInUtc() ?? DateTime(2000);
             final bTime = b.createdAt?.getDateTimeInUtc() ?? DateTime(2000);
             return bTime.compareTo(aTime); // newest first
-          });
+        });
+
+        setState(() {
+          _photos = photos;
+          _groupPhotosByDate(photos);
         });
       } else if (response.errors.isNotEmpty) {
         safePrint('Query errors: ${response.errors}');
       }
     } catch (e) {
       safePrint('Error fetching photos: $e');
+    }
+  }
+
+  void _groupPhotosByDate(List<Photo> photos) {
+    _groupedPhotos = {};
+    _sortedDates = [];
+
+    for (var photo in photos) {
+      final date = photo.createdAt?.getDateTimeInUtc().toLocal() ?? DateTime.now();
+      final dateKey = _formatDate(date);
+
+      if (!_groupedPhotos.containsKey(dateKey)) {
+        _groupedPhotos[dateKey] = [];
+        _sortedDates.add(dateKey);
+      }
+      _groupedPhotos[dateKey]!.add(photo);
+    }
+  }
+
+  String _formatDate(DateTime date) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final yesterday = today.subtract(const Duration(days: 1));
+    final dateToCheck = DateTime(date.year, date.month, date.day);
+
+    if (dateToCheck == today) {
+      return 'Today';
+    } else if (dateToCheck == yesterday) {
+      return 'Yesterday';
+    } else {
+      return DateFormat('MMMM d, yyyy').format(date);
     }
   }
 
@@ -201,29 +242,55 @@ class _HomeScreenState extends State<HomeScreen> {
                                       const SizedBox(width: 8),
                                   ],
                               ),
-                              SliverPadding(
-                                  padding: const EdgeInsets.all(16),
-                                  sliver: SliverGrid(
+                              // Generate sticky headers for each date group
+                              ..._sortedDates.map((dateKey) {
+                                final photosForDate = _groupedPhotos[dateKey]!;
+                                return SliverStickyHeader(
+                                  header: Container(
+                                    height: 50,
+                                    color: colorScheme.surface.withOpacity(0.95), // Slight transparency for sticky effect
+                                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                                    alignment: Alignment.centerLeft,
+                                    child: Text(
+                                      dateKey,
+                                      style: TextStyle(
+                                        color: colorScheme.onSurface,
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+                                  sliver: SliverPadding(
+                                    padding: const EdgeInsets.only(left: 16, right: 16, bottom: 24),
+                                    sliver: SliverGrid(
                                       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                                        crossAxisCount: 2, crossAxisSpacing: 12, mainAxisSpacing: 12, childAspectRatio: 1,
+                                        crossAxisCount: 3, // Increased to 3 for better density
+                                        crossAxisSpacing: 4, // Reduced gap
+                                        mainAxisSpacing: 4, // Reduced gap
+                                        childAspectRatio: 1,
                                       ),
                                       delegate: SliverChildBuilderDelegate(
-                                          (context, index) {
-                                              final photo = _photos[index];
-                                              return PhotoGridItem(
-                                                  photo: photo,
-                                                  onTap: () async {
-                                                      await Navigator.of(context).push(
-                                                          MaterialPageRoute(builder: (_) => PhotoDetailScreen(photo: photo)),
-                                                      );
-                                                      _fetchPhotos(); // Refresh after returning from detail
-                                                  },
+                                        (context, index) {
+                                          final photo = photosForDate[index];
+                                          return PhotoGridItem(
+                                            photo: photo,
+                                            onTap: () async {
+                                              await Navigator.of(context).push(
+                                                MaterialPageRoute(builder: (_) => PhotoDetailScreen(photo: photo)),
                                               );
-                                          },
-                                          childCount: _photos.length,
+                                              _fetchPhotos();
+                                            },
+                                          );
+                                        },
+                                        childCount: photosForDate.length,
                                       ),
+                                    ),
                                   ),
-                              ),
+                                );
+                              }).toList(),
+                              
+                              // Bottom padding
+                              const SliverToBoxAdapter(child: SizedBox(height: 80)),
                           ],
                       ),
                 ),
