@@ -128,77 +128,82 @@ class _SearchScreenState extends State<SearchScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: TextField(
-          controller: _searchController,
-          decoration: InputDecoration(
-            hintText: 'Search photos, people, text...',
-            border: InputBorder.none,
-            hintStyle: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
-          ),
-          textInputAction: TextInputAction.search,
-          onSubmitted: _performSearch,
-          autofocus: false, // Don't autofocus to avoid keyboard popping on tab switch
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.search),
-            onPressed: () => _performSearch(_searchController.text),
-          ),
-          ProfileMenuButton(userEmail: widget.userEmail),
-          const SizedBox(width: 8),
-        ],
-      ),
-      body: _isSearching
-          ? const Center(child: CircularProgressIndicator())
-          : _searchResults.isEmpty
-              ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        _hasSearched ? Icons.search_off : Icons.search,
-                        size: 64,
-                        color: Colors.grey[400],
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        _hasSearched ? 'No results found' : 'Find photos by text or person',
-                        style: TextStyle(
-                          fontSize: 16,
-                          color: Colors.grey[600],
+      body: SafeArea(
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: SearchBar(
+                controller: _searchController,
+                hintText: 'Search photos, people, text...',
+                leading: const Icon(Icons.search),
+                trailing: [
+                  ProfileMenuButton(userEmail: widget.userEmail),
+                ],
+                onSubmitted: _performSearch,
+              ),
+            ),
+            Expanded(
+              child: _isSearching
+                  ? const Center(child: CircularProgressIndicator())
+                  : _searchResults.isEmpty
+                      ? Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                _hasSearched ? Icons.search_off : Icons.search,
+                                size: 64,
+                                color: Colors.grey[400],
+                              ),
+                              const SizedBox(height: 16),
+                              Text(
+                                _hasSearched ? 'No results found' : 'Find photos by text or person',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  color: Colors.grey[600],
+                                ),
+                              ),
+                            ],
+                          ),
+                        )
+                      : GridView.builder(
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 3,
+                            crossAxisSpacing: 4,
+                            mainAxisSpacing: 4,
+                          ),
+                          itemCount: _searchResults.length,
+                          itemBuilder: (context, index) {
+                            final photo = _searchResults[index];
+                            final url = _photoUrls[photo.id];
+                            return GestureDetector(
+                              onTap: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(builder: (_) => PhotoDetailScreen(photo: photo)),
+                                );
+                              },
+                              child: url != null
+                                  ? ClipRRect(
+                                      borderRadius: BorderRadius.circular(12),
+                                      child: Image.network(url, fit: BoxFit.cover),
+                                    )
+                                  : Container(
+                                      decoration: BoxDecoration(
+                                        color: Colors.grey[200],
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      child: const Center(child: Icon(Icons.image)),
+                                    ),
+                            );
+                          },
                         ),
-                      ),
-                    ],
-                  ),
-                )
-              : GridView.builder(
-                  padding: const EdgeInsets.all(4),
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 3,
-                    crossAxisSpacing: 4,
-                    mainAxisSpacing: 4,
-                  ),
-                  itemCount: _searchResults.length,
-                  itemBuilder: (context, index) {
-                    final photo = _searchResults[index];
-                    final url = _photoUrls[photo.id];
-                    return GestureDetector(
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (_) => PhotoDetailScreen(photo: photo)),
-                        );
-                      },
-                      child: url != null
-                          ? Image.network(url, fit: BoxFit.cover)
-                          : Container(
-                              color: Colors.grey[200],
-                              child: const Center(child: Icon(Icons.image)),
-                            ),
-                    );
-                  },
-                ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
