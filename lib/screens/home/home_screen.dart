@@ -83,65 +83,78 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _uploadPhoto() async {
     final ImagePicker picker = ImagePicker();
-    final XFile? pickedFile = await picker.pickImage(
-      source: ImageSource.gallery,
+    final List<XFile> pickedFiles = await picker.pickMultiImage(
       maxWidth: 1920,
       maxHeight: 1920,
       imageQuality: 85,
     );
 
-    if (pickedFile == null) return;
+    if (pickedFiles.isEmpty) return;
 
     setState(() => _isUploading = true);
+    int successCount = 0;
+    int failCount = 0;
 
     try {
-      // Generate unique S3 key
-      final uuid = const Uuid().v4();
-      final extension = pickedFile.name.split('.').last;
+      for (final pickedFile in pickedFiles) {
+        try {
+          // Generate unique S3 key
+          final uuid = const Uuid().v4();
+          final extension = pickedFile.name.split('.').last;
 
-      // Upload to S3 using identity-based path
-      final uploadResult = await Amplify.Storage.uploadFile(
-        localFile: kIsWeb
-            ? AWSFile.fromStream(pickedFile.openRead(), size: await pickedFile.length())
-            : AWSFile.fromPath(pickedFile.path),
-        path: StoragePath.fromIdentityId(
-          (identityId) => 'photos/$identityId/$uuid.$extension',
-        ),
-      ).result;
+          // Upload to S3
+          final uploadResult = await Amplify.Storage.uploadFile(
+            localFile: kIsWeb
+                ? AWSFile.fromStream(pickedFile.openRead(), size: await pickedFile.length())
+                : AWSFile.fromPath(pickedFile.path),
+            path: StoragePath.fromIdentityId(
+              (identityId) => 'photos/$identityId/$uuid.$extension',
+            ),
+          ).result;
 
-      final actualS3Key = uploadResult.uploadedItem.path;
+          final actualS3Key = uploadResult.uploadedItem.path;
 
-      // Create Photo record in AppSync
-      // Use the same UUID for the Photo ID and the file name to simplify Lambda lookup
-      final newPhoto = Photo(
-        id: uuid,
-        s3Key: actualS3Key,
-        facesCount: 0,
-        analyzedAt: TemporalDateTime.now(),
-      );
-      final createRequest = ModelMutations.create(newPhoto);
-      final createResponse = await Amplify.API.mutate(request: createRequest).response;
+          // Create Photo record
+          final newPhoto = Photo(
+            id: uuid,
+            s3Key: actualS3Key,
+            facesCount: 0,
+            analyzedAt: TemporalDateTime.now(),
+          );
+          
+          final createResponse = await Amplify.API.mutate(
+            request: ModelMutations.create(newPhoto)
+          ).response;
 
-      if (createResponse.errors.isNotEmpty) {
-        throw Exception('Failed to create photo record: ${createResponse.errors}');
+          if (createResponse.errors.isNotEmpty) {
+             safePrint('Error uploading ${pickedFile.name}: ${createResponse.errors}');
+             failCount++;
+          } else {
+             successCount++;
+          }
+        } catch (e) {
+          safePrint('Exception uploading ${pickedFile.name}: $e');
+          failCount++;
+        }
       }
 
       if (mounted) {
+        final msg = failCount > 0 
+          ? 'Uploaded $successCount photos. Failed: $failCount' 
+          : 'Uploaded $successCount photos successfully!';
+          
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: const Text('Photo uploaded successfully!'),
-            backgroundColor: Theme.of(context).colorScheme.primary,
+            content: Text(msg),
+            backgroundColor: failCount > 0 ? Colors.orange : Theme.of(context).colorScheme.primary,
           ),
         );
-        await _fetchPhotos(); // Refresh
+        await _fetchPhotos();
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Upload failed: ${e.toString().replaceFirst("Exception: ", "")}'),
-            backgroundColor: Theme.of(context).colorScheme.error,
-          ),
+           SnackBar(content: Text('Upload process error: $e'), backgroundColor: Colors.red),
         );
       }
     } finally {
