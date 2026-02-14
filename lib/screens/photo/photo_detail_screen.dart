@@ -242,29 +242,89 @@ class _PhotoDetailScreenState extends State<PhotoDetailScreen> {
     setState(() => _isDeleting = true);
 
     try {
-      // Delete from S3
+      // 1. Get all PhotoPerson links for this photo
+      final linksReq = ModelQueries.list(
+          PhotoPerson.classType,
+          where: PhotoPerson.PHOTOID.eq(widget.photo.id)
+      );
+      final linksRes = await Amplify.API.query(request: linksReq).response;
+      final links = linksRes.data?.items.whereType<PhotoPerson>().toList() ?? [];
+
+      // 2. Process each person link
+      for (var link in links) {
+          final personId = link.personId;
+          
+          // Delete the PhotoPerson link
+          await Amplify.API.mutate(request: ModelMutations.delete(link));
+
+          // Check if this person has other photos
+          final checkReq = ModelQueries.list(
+              PhotoPerson.classType,
+              where: PhotoPerson.PERSONID.eq(personId)
+          );
+          final checkRes = await Amplify.API.query(request: checkReq).response;
+          final remainingLinks = checkRes.data?.items.whereType<PhotoPerson>().toList() ?? [];
+
+          if (remainingLinks.isEmpty) {
+              // No more photos for this person -> Delete Person
+              // First fetch the person to get version if needed, or just delete by ID if model allows 
+              // (ModelMutations.deleteById is not standard in this version, usually need model instance)
+              // We'll try to fetch first to be safe and compatible
+              final pReq = ModelQueries.get(Person.classType, PersonModelIdentifier(id: personId));
+              final pRes = await Amplify.API.query(request: pReq).response;
+              if (pRes.data != null) {
+                  await Amplify.API.mutate(request: ModelMutations.delete(pRes.data!));
+                  safePrint('Deleted orphaned person: ${pRes.data!.name}');
+              }
+          } else {
+              // Person still has photos. Check if we need to update thumbnail.
+              // We do this if the deleted photo key matches the person's thumbnail key.
+              final pReq = ModelQueries.get(Person.classType, PersonModelIdentifier(id: personId));
+              final pRes = await Amplify.API.query(request: pReq).response;
+              final person = pRes.data;
+              
+              if (person != null && person.thumbnailS3Key == widget.photo.s3Key) {
+                   // Pick a new thumbnail from remaining photos
+                   // We need the photo for the first remaining link
+                   try {
+                       final firstLink = remainingLinks.first;
+                       final newPhotoReq = ModelQueries.get(Photo.classType, PhotoModelIdentifier(id: firstLink.photoId));
+                       final newPhotoRes = await Amplify.API.query(request: newPhotoReq).response;
+                       if (newPhotoRes.data != null) {
+                           final updatedPerson = person.copyWith(thumbnailS3Key: newPhotoRes.data!.s3Key);
+                           await Amplify.API.mutate(request: ModelMutations.update(updatedPerson));
+                           safePrint('Updated thumbnail for person: ${person.name}');
+                       }
+                   } catch (e) {
+                       safePrint('Failed to update thumbnail: $e');
+                   }
+              }
+          }
+      }
+
+      // 3. Delete from S3
       await Amplify.Storage.remove(
         path: StoragePath.fromString(widget.photo.s3Key),
       ).result;
 
-      // Delete from AppSync
-      final deleteRequest = ModelMutations.delete(widget.photo);
-      await Amplify.API.mutate(request: deleteRequest).response;
+      // 4. Delete the Photo itself
+      await Amplify.API.mutate(request: ModelMutations.delete(widget.photo)).response;
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: const Text('Photo deleted'),
+            content: const Text('Photo deleted and connections cleaned up'),
             backgroundColor: Theme.of(context).colorScheme.primary,
           ),
         );
         Navigator.of(context).pop(); // Go back to home
       }
     } catch (e) {
+      safePrint('Error deleting photo: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Delete failed: ${e.toString().replaceFirst("Exception: ", "")}'),
+            content: Text('Delete failed: ${e.toString()}'),
             backgroundColor: Theme.of(context).colorScheme.error,
           ),
         );

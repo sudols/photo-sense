@@ -4,6 +4,7 @@ import 'package:amplify_flutter/amplify_flutter.dart';
 import 'package:amplify_api/amplify_api.dart';
 import 'package:amplify_storage_s3/amplify_storage_s3.dart';
 import '../../models/Person.dart';
+import '../../models/PhotoPerson.dart';
 import '../../widgets/face_avatar.dart';
 import 'person_detail_screen.dart';
 
@@ -23,6 +24,7 @@ class _PeopleScreenState extends State<PeopleScreen> {
   void initState() {
     super.initState();
     _loadPeople();
+    _cleanupOrphans();
   }
 
   Future<void> _loadPeople() async {
@@ -64,6 +66,42 @@ class _PeopleScreenState extends State<PeopleScreen> {
         }
       }
     }
+  }
+
+  Future<void> _cleanupOrphans() async {
+      try {
+          // Get all people
+          final request = ModelQueries.list(Person.classType);
+          final response = await Amplify.API.query(request: request).response;
+          final allPeople = response.data?.items.whereType<Person>().toList() ?? [];
+
+          int deletedCount = 0;
+          for (var person in allPeople) {
+             // Check connection count
+             // Note: Ideally we'd do a filtered query for PhotoPerson, but we can't do "count" easily without fetching.
+             // Given typical scale, querying links for each person is okay-ish, or we could fetch ALL PhotoPersons and map them.
+             // Fetching all PhotoPersons might be heavy if there are thousands.
+             // Let's check individually for now.
+             final linkReq = ModelQueries.list(PhotoPerson.classType, where: PhotoPerson.PERSONID.eq(person.id));
+             final linkRes = await Amplify.API.query(request: linkReq).response;
+             
+             if (linkRes.data == null || linkRes.data!.items.isEmpty) {
+                 // Orphan found!
+                 safePrint('Deleting orphan: ${person.name} (${person.id})');
+                 await Amplify.API.mutate(request: ModelMutations.delete(person));
+                 deletedCount++;
+             }
+          }
+
+          if (deletedCount > 0) {
+              safePrint('Cleaned up $deletedCount orphan person records');
+              // Reload
+              if (mounted) _loadPeople();
+          }
+
+      } catch (e) {
+          safePrint('Error during orphan cleanup: $e');
+      }
   }
 
   @override

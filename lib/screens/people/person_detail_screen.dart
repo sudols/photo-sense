@@ -60,26 +60,50 @@ class _PersonDetailScreenState extends State<PersonDetailScreen> {
       final photoPersons = response.data?.items.whereType<PhotoPerson>().toList() ?? [];
 
       if (photoPersons.isEmpty) {
-        if (mounted) setState(() => _isLoading = false);
+        if (mounted) {
+             // Cleanup if no links at all
+             await Amplify.API.mutate(request: ModelMutations.delete(_person));
+             if (mounted) {
+                 ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('This person has no photos and has been removed.')));
+                 Navigator.pop(context);
+             }
+        }
         return;
       }
 
-      // 2. Fetch Photos
-      // Basic approach: Parallel Get requests
-      // Note: In production, consider pagination or batch optimization.
-      final photoIds = photoPersons.map((pp) => pp.photoId).toSet().toList(); // Dedup just in case
+      // 2. Fetch Photos and Cleanup broken links
+      final photoIds = photoPersons.map((pp) => pp.photoId).toSet().toList();
       final List<Photo> loadedPhotos = [];
 
       for (var photoId in photoIds) {
         try {
           final photoReq = ModelQueries.get(Photo.classType, PhotoModelIdentifier(id: photoId));
           final photoRes = await Amplify.API.query(request: photoReq).response;
+          
           if (photoRes.data != null) {
             loadedPhotos.add(photoRes.data!);
+          } else {
+            // Photo missing! Identify broken links.
+            final brokenLinks = photoPersons.where((pp) => pp.photoId == photoId).toList();
+            for (var link in brokenLinks) {
+                await Amplify.API.mutate(request: ModelMutations.delete(link));
+                safePrint('Deleted broken PhotoPerson link: ${link.id}');
+            }
           }
         } catch (e) {
           safePrint('Error loading photo $photoId: $e');
         }
+      }
+
+      // Check if any photos remain
+      if (loadedPhotos.isEmpty) {
+          // All photos were broken/missing
+          await Amplify.API.mutate(request: ModelMutations.delete(_person));
+          if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Person removed (no valid photos found).')));
+              Navigator.pop(context);
+          }
+          return;
       }
 
       // Sort by createdAt desc
