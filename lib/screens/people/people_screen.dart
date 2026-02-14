@@ -118,7 +118,6 @@ class _PeopleScreenState extends State<PeopleScreen> {
 
     return Scaffold(
       appBar: AppBar(
-          title: const Text('People'),
           actions: [
               ProfileMenuButton(userEmail: widget.userEmail),
               const SizedBox(width: 8),
