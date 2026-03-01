@@ -1,0 +1,29 @@
+services:
+  - type: web
+    name: photosense-backend
+    runtime: python
+    buildCommand: 'pip install -r requirements.txt && python manage.py migrate && python manage.py collectstatic --noinput'
+    startCommand: 'gunicorn photosense.wsgi'
+    envVars:
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DEBUG
+        value: 'False'
+      - key: DATABASE_URL
+        fromDatabase:
+          name: photosense-db
+          property: connectionString
+      - key: AWS_ACCESS_KEY_ID
+        sync: false
+      - key: AWS_SECRET_ACCESS_KEY
+        sync: false
+      - key: AWS_REGION
+        value: ap-south-1
+      - key: S3_BUCKET_NAME
+        sync: false
+      - key: REKOGNITION_COLLECTION_ID
+        value: photosense-faces
+
+databases:
+  - name: photosense-db
+    plan: free

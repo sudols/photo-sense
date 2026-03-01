@@ -1,0 +1,9 @@
+django>=4.2
+djangorestframework
+djangorestframework-simplejwt
+django-cors-headers
+dj-database-url
+boto3
+python-dotenv
+Pillow
+gunicorn
