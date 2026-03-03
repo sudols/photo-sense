@@ -13,8 +13,8 @@ class SignInScreen extends StatefulWidget {
 
 class _SignInScreenState extends State<SignInScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _emailController = TextEditingController(text: 'demo@example.com');
-  final _passwordController = TextEditingController(text: 'test_password_123');
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
   bool _isLoading = false;
   bool _obscurePassword = true;
 
@@ -31,7 +31,7 @@ class _SignInScreenState extends State<SignInScreen> {
     setState(() => _isLoading = true);
 
     try {
-      await AuthService.signIn(
+      await AuthService.login(
         _emailController.text.trim(),
         _passwordController.text,
       );
@@ -51,9 +51,7 @@ class _SignInScreenState extends State<SignInScreen> {
         );
       }
     } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 

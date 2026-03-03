@@ -1,15 +1,12 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
-import 'package:amplify_flutter/amplify_flutter.dart';
-import 'package:amplify_api/amplify_api.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter_speed_dial/flutter_speed_dial.dart';
-import 'package:uuid/uuid.dart';
 import 'package:flutter_sticky_header/flutter_sticky_header.dart';
 import 'package:intl/intl.dart';
-import '../../models/Photo.dart';
+import '../../models/photo.dart';
 import '../../services/auth_service.dart';
+import '../../services/photo_service.dart';
 import '../../widgets/photo_grid_item.dart';
 import '../../widgets/profile_menu_button.dart';
 import '../auth/sign_in_screen.dart';
@@ -38,58 +35,23 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    _loadUserAndPhotos();
+    _loadPhotos();
   }
 
-  Future<void> _loadUserAndPhotos() async {
+  Future<void> _loadPhotos() async {
     setState(() => _isLoading = true);
     try {
-      // Get current user info
-      final user = await AuthService.getCurrentUser();
-      if (user != null) {
-        final attributes = await Amplify.Auth.fetchUserAttributes();
-        final emailAttr = attributes.firstWhere(
-          (a) => a.userAttributeKey == AuthUserAttributeKey.email,
-          orElse: () => AuthUserAttribute(
-            userAttributeKey: AuthUserAttributeKey.email,
-            value: user.username,
-          ),
-        );
-        _userEmail = emailAttr.value;
-      }
-
-      // Fetch photos from AppSync
-      await _fetchPhotos();
-    } catch (e) {
-      safePrint('Error loading data: $e');
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
-  }
-
-  Future<void> _fetchPhotos() async {
-    try {
-      final request = ModelQueries.list(Photo.classType);
-      final response = await Amplify.API.query(request: request).response;
-
-      if (response.data != null) {
-        final photos = response.data!.items.whereType<Photo>().toList();
-        // Sort by creation date descending
-        photos.sort((a, b) {
-            final aTime = a.createdAt?.getDateTimeInUtc() ?? DateTime(2000);
-            final bTime = b.createdAt?.getDateTimeInUtc() ?? DateTime(2000);
-            return bTime.compareTo(aTime); // newest first
-        });
-
+      final photos = await PhotoService.listPhotos();
+      if (mounted) {
         setState(() {
           _photos = photos;
           _groupPhotosByDate(photos);
+          _isLoading = false;
         });
-      } else if (response.errors.isNotEmpty) {
-        safePrint('Query errors: ${response.errors}');
       }
     } catch (e) {
-      safePrint('Error fetching photos: $e');
+      debugPrint('Error fetching photos: $e');
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -98,7 +60,7 @@ class _HomeScreenState extends State<HomeScreen> {
     _sortedDates = [];
 
     for (var photo in photos) {
-      final date = photo.createdAt?.getDateTimeInUtc().toLocal() ?? DateTime.now();
+      final date = photo.createdAt.toLocal();
       final dateKey = _formatDate(date);
 
       if (!_groupedPhotos.containsKey(dateKey)) {
@@ -141,63 +103,31 @@ class _HomeScreenState extends State<HomeScreen> {
     try {
       for (final pickedFile in pickedFiles) {
         try {
-          // Generate unique S3 key
-          final uuid = const Uuid().v4();
-          final extension = pickedFile.name.split('.').last;
-
-          // Upload to S3
-          final uploadResult = await Amplify.Storage.uploadFile(
-            localFile: kIsWeb
-                ? AWSFile.fromStream(pickedFile.openRead(), size: await pickedFile.length())
-                : AWSFile.fromPath(pickedFile.path),
-            path: StoragePath.fromIdentityId(
-              (identityId) => 'photos/$identityId/$uuid.$extension',
-            ),
-          ).result;
-
-          final actualS3Key = uploadResult.uploadedItem.path;
-
-          // Create Photo record
-          final newPhoto = Photo(
-            id: uuid,
-            s3Key: actualS3Key,
-            facesCount: 0,
-            analyzedAt: TemporalDateTime.now(),
-          );
-          
-          final createResponse = await Amplify.API.mutate(
-            request: ModelMutations.create(newPhoto)
-          ).response;
-
-          if (createResponse.errors.isNotEmpty) {
-             safePrint('Error uploading ${pickedFile.name}: ${createResponse.errors}');
-             failCount++;
-          } else {
-             successCount++;
-          }
+          await PhotoService.uploadPhoto(pickedFile.path);
+          successCount++;
         } catch (e) {
-          safePrint('Exception uploading ${pickedFile.name}: $e');
+          debugPrint('Exception uploading ${pickedFile.name}: $e');
           failCount++;
         }
       }
 
       if (mounted) {
-        final msg = failCount > 0 
-          ? 'Uploaded $successCount photos. Failed: $failCount' 
-          : 'Uploaded $successCount photos successfully!';
-          
+        final msg = failCount > 0
+            ? 'Uploaded $successCount photos. Failed: $failCount'
+            : 'Uploaded $successCount photos successfully!';
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(msg),
             backgroundColor: failCount > 0 ? Colors.orange : Theme.of(context).colorScheme.primary,
           ),
         );
-        await _fetchPhotos();
+        await _loadPhotos();
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-           SnackBar(content: Text('Upload process error: $e'), backgroundColor: Colors.red),
+          SnackBar(content: Text('Upload process error: $e'), backgroundColor: Colors.red),
         );
       }
     } finally {
@@ -219,84 +149,84 @@ class _HomeScreenState extends State<HomeScreen> {
           _isLoading
               ? const Center(child: CircularProgressIndicator())
               : RefreshIndicator(
-                  onRefresh: _fetchPhotos,
-                  child: _photos.isEmpty 
+                  onRefresh: _loadPhotos,
+                  child: _photos.isEmpty
                       ? CustomScrollView(
                           slivers: [
-                              SliverAppBar(
-                                  floating: true,
-                                  snap: true,
-                                  actions: [
-                                      ProfileMenuButton(userEmail: _userEmail),
-                                      const SizedBox(width: 8),
-                                  ],
-                              ),
-                              SliverFillRemaining(child: _buildEmptyState(colorScheme)),
+                            SliverAppBar(
+                              floating: true,
+                              snap: true,
+                              actions: [
+                                ProfileMenuButton(userEmail: _userEmail),
+                                const SizedBox(width: 8),
+                              ],
+                            ),
+                            SliverFillRemaining(child: _buildEmptyState(colorScheme)),
                           ],
                         )
                       : CustomScrollView(
                           slivers: [
-                              SliverAppBar(
-                                  floating: true,
-                                  snap: true,
-                                  actions: [
-                                      ProfileMenuButton(userEmail: _userEmail),
-                                      const SizedBox(width: 8),
-                                  ],
-                              ),
-                              // Generate sticky headers for each date group
-                              ..._sortedDates.map((dateKey) {
-                                final photosForDate = _groupedPhotos[dateKey]!;
-                                return SliverStickyHeader(
-                                  header: Container(
-                                    height: 50,
-                                    color: colorScheme.surface.withOpacity(0.95), // Slight transparency for sticky effect
-                                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                                    alignment: Alignment.centerLeft,
-                                    child: Text(
-                                      dateKey,
-                                      style: TextStyle(
-                                        color: colorScheme.onSurface,
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.bold,
-                                      ),
+                            SliverAppBar(
+                              floating: true,
+                              snap: true,
+                              actions: [
+                                ProfileMenuButton(userEmail: _userEmail),
+                                const SizedBox(width: 8),
+                              ],
+                            ),
+                            // Generate sticky headers for each date group
+                            ..._sortedDates.map((dateKey) {
+                              final photosForDate = _groupedPhotos[dateKey]!;
+                              return SliverStickyHeader(
+                                header: Container(
+                                  height: 50,
+                                  color: colorScheme.surface.withOpacity(0.95),
+                                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                                  alignment: Alignment.centerLeft,
+                                  child: Text(
+                                    dateKey,
+                                    style: TextStyle(
+                                      color: colorScheme.onSurface,
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
                                     ),
                                   ),
-                                  sliver: SliverPadding(
-                                    padding: const EdgeInsets.only(left: 16, right: 16, bottom: 24),
-                                    sliver: SliverGrid(
-                                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                                        crossAxisCount: 3, // Increased to 3 for better density
-                                        crossAxisSpacing: 4, // Reduced gap
-                                        mainAxisSpacing: 4, // Reduced gap
-                                        childAspectRatio: 1,
-                                      ),
-                                      delegate: SliverChildBuilderDelegate(
-                                        (context, index) {
-                                          final photo = photosForDate[index];
-                                          return PhotoGridItem(
-                                            photo: photo,
-                                            onTap: () async {
-                                              await Navigator.of(context).push(
-                                                MaterialPageRoute(builder: (_) => PhotoDetailScreen(photo: photo)),
-                                              );
-                                              _fetchPhotos();
-                                            },
-                                          );
-                                        },
-                                        childCount: photosForDate.length,
-                                      ),
+                                ),
+                                sliver: SliverPadding(
+                                  padding: const EdgeInsets.only(left: 16, right: 16, bottom: 24),
+                                  sliver: SliverGrid(
+                                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                                      crossAxisCount: 3,
+                                      crossAxisSpacing: 4,
+                                      mainAxisSpacing: 4,
+                                      childAspectRatio: 1,
+                                    ),
+                                    delegate: SliverChildBuilderDelegate(
+                                      (context, index) {
+                                        final photo = photosForDate[index];
+                                        return PhotoGridItem(
+                                          photo: photo,
+                                          onTap: () async {
+                                            await Navigator.of(context).push(
+                                              MaterialPageRoute(builder: (_) => PhotoDetailScreen(photo: photo)),
+                                            );
+                                            _loadPhotos();
+                                          },
+                                        );
+                                      },
+                                      childCount: photosForDate.length,
                                     ),
                                   ),
-                                );
-                              }).toList(),
-                              
-                              // Bottom padding
-                              const SliverToBoxAdapter(child: SizedBox(height: 80)),
+                                ),
+                              );
+                            }),
+
+                            // Bottom padding
+                            const SliverToBoxAdapter(child: SizedBox(height: 80)),
                           ],
-                      ),
+                        ),
                 ),
-          
+
           // Tab 1: Search
           SearchScreen(userEmail: _userEmail),
 
@@ -329,56 +259,51 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ],
       ),
-      floatingActionButton: _currentIndex == 0 
-        ? SpeedDial(
-            icon: Icons.add,
-            activeIcon: Icons.close,
-            backgroundColor: colorScheme.primary,
-            foregroundColor: colorScheme.onPrimary,
-            activeBackgroundColor: colorScheme.error,
-            activeForegroundColor: colorScheme.onError,
-            spacing: 12,
-            spaceBetweenChildren: 8,
-            visible: true,
-            curve: Curves.easeIn,
-            overlayColor: Colors.black,
-            overlayOpacity: 0.5,
-            direction: SpeedDialDirection.up,
-            elevation: 8.0,
-            isOpenOnStart: false,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            children: [
-              SpeedDialChild(
-                child: const Icon(Icons.folder_open),
-                backgroundColor: colorScheme.surfaceContainerHighest, 
-                foregroundColor: colorScheme.onSurfaceVariant,
-                label: 'Add collection',
-                labelStyle: TextStyle(fontWeight: FontWeight.w500, color: colorScheme.onSurfaceVariant),
-                labelBackgroundColor: colorScheme.surfaceContainerHighest,
-                onTap: _uploadCollection, 
-              ),
-              SpeedDialChild(
-                child: const Icon(Icons.photo), 
-                backgroundColor: colorScheme.surfaceContainerHighest,
-                foregroundColor: colorScheme.onSurfaceVariant,
-                label: 'Add photos', 
-                labelStyle: TextStyle(fontWeight: FontWeight.w500, color: colorScheme.onSurfaceVariant),
-                labelBackgroundColor: colorScheme.surfaceContainerHighest,
-                onTap: _uploadPhoto,
-              ),
-            ],
-          )
-        : null,
+      floatingActionButton: _currentIndex == 0
+          ? SpeedDial(
+              icon: Icons.add,
+              activeIcon: Icons.close,
+              backgroundColor: colorScheme.primary,
+              foregroundColor: colorScheme.onPrimary,
+              activeBackgroundColor: colorScheme.error,
+              activeForegroundColor: colorScheme.onError,
+              spacing: 12,
+              spaceBetweenChildren: 8,
+              visible: true,
+              curve: Curves.easeIn,
+              overlayColor: Colors.black,
+              overlayOpacity: 0.5,
+              direction: SpeedDialDirection.up,
+              elevation: 8.0,
+              isOpenOnStart: false,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              children: [
+                SpeedDialChild(
+                  child: const Icon(Icons.folder_open),
+                  backgroundColor: colorScheme.surfaceContainerHighest,
+                  foregroundColor: colorScheme.onSurfaceVariant,
+                  label: 'Add collection',
+                  labelStyle: TextStyle(fontWeight: FontWeight.w500, color: colorScheme.onSurfaceVariant),
+                  labelBackgroundColor: colorScheme.surfaceContainerHighest,
+                  onTap: _uploadCollection,
+                ),
+                SpeedDialChild(
+                  child: const Icon(Icons.photo),
+                  backgroundColor: colorScheme.surfaceContainerHighest,
+                  foregroundColor: colorScheme.onSurfaceVariant,
+                  label: 'Add photos',
+                  labelStyle: TextStyle(fontWeight: FontWeight.w500, color: colorScheme.onSurfaceVariant),
+                  labelBackgroundColor: colorScheme.surfaceContainerHighest,
+                  onTap: _uploadPhoto,
+                ),
+              ],
+            )
+          : null,
     );
   }
 
   Future<void> _uploadCollection() async {
     try {
-      // Use FilePicker to pick multiple files (simulating collection)
-      // On mobile, picking a directory is tricky due to scoped storage.
-      // So we use pickFiles with allowMultiple: true and type: image.
-      // This is effectively "Select Folder" if the user selects all in a folder.
-      
       FilePickerResult? result = await FilePicker.platform.pickFiles(
         allowMultiple: true,
         type: FileType.image,
@@ -392,71 +317,37 @@ class _HomeScreenState extends State<HomeScreen> {
 
       for (final platformFile in result.files) {
         try {
-           final uuid = const Uuid().v4();
-           final extension = platformFile.extension ?? 'jpg';
-           final path = platformFile.path;
-           final bytes = platformFile.bytes;
+          final path = platformFile.path;
+          if (path == null) {
+            debugPrint('Skipping ${platformFile.name}: No valid path');
+            continue;
+          }
 
-           // Determine file input (bytes for web, path for mobile/desktop)
-           final awsFile = kIsWeb && bytes != null
-               ? AWSFile.fromData(bytes)
-               : path != null 
-                   ? AWSFile.fromPath(path) 
-                   : null;
-
-           if (awsFile == null) {
-              safePrint('Skipping ${platformFile.name}: No valid path or bytes');
-              continue;
-           }
-
-           final uploadResult = await Amplify.Storage.uploadFile(
-            localFile: awsFile,
-            path: StoragePath.fromIdentityId(
-              (identityId) => 'photos/$identityId/$uuid.$extension',
-            ),
-           ).result;
-
-           final actualS3Key = uploadResult.uploadedItem.path;
-           
-           final newPhoto = Photo(
-            id: uuid,
-            s3Key: actualS3Key,
-            facesCount: 0,
-            analyzedAt: TemporalDateTime.now(),
-           );
-           
-           final createResponse = await Amplify.API.mutate(
-            request: ModelMutations.create(newPhoto)
-           ).response;
-
-           if (createResponse.errors.isNotEmpty) {
-              failCount++;
-           } else {
-              successCount++;
-           }
+          await PhotoService.uploadPhoto(path);
+          successCount++;
         } catch (e) {
-            safePrint('Error uploading ${platformFile.name}: $e');
-            failCount++;
+          debugPrint('Error uploading ${platformFile.name}: $e');
+          failCount++;
         }
       }
 
       if (mounted) {
-        final msg = failCount > 0 
-          ? 'Uploaded $successCount photos. Failed: $failCount' 
-          : 'Uploaded $successCount photos from collection!';
-          
+        final msg = failCount > 0
+            ? 'Uploaded $successCount photos. Failed: $failCount'
+            : 'Uploaded $successCount photos from collection!';
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(msg),
             backgroundColor: failCount > 0 ? Colors.orange : Theme.of(context).colorScheme.primary,
           ),
         );
-        await _fetchPhotos();
+        await _loadPhotos();
       }
     } catch (e) {
-       safePrint('Collection upload error: $e');
+      debugPrint('Collection upload error: $e');
     } finally {
-       if (mounted) setState(() => _isUploading = false);
+      if (mounted) setState(() => _isUploading = false);
     }
   }
 

@@ -1,35 +1,12 @@
-import 'package:amplify_flutter/amplify_flutter.dart';
-import 'package:amplify_auth_cognito/amplify_auth_cognito.dart';
-import 'package:amplify_storage_s3/amplify_storage_s3.dart';
-import 'package:amplify_api/amplify_api.dart';
 import 'package:flutter/material.dart';
-import 'models/ModelProvider.dart';
 import 'screens/auth/sign_in_screen.dart';
 import 'screens/home/home_screen.dart';
+import 'services/auth_service.dart';
 import 'theme/app_theme.dart';
-import 'amplify_outputs.dart';
 
-Future<void> main() async {
+void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  await _configureAmplify();
   runApp(const PhotoSenseApp());
-}
-
-Future<void> _configureAmplify() async {
-  try {
-    final auth = AmplifyAuthCognito();
-    final storage = AmplifyStorageS3();
-    final api = AmplifyAPI(
-      options: APIPluginOptions(modelProvider: ModelProvider.instance),
-    );
-
-    await Amplify.addPlugins([auth, storage, api]);
-    await Amplify.configure(amplifyConfig);
-
-    safePrint('Amplify configured successfully!');
-  } on Exception catch (e) {
-    safePrint('Error configuring Amplify: $e');
-  }
 }
 
 class PhotoSenseApp extends StatelessWidget {
@@ -63,28 +40,20 @@ class _AuthCheckState extends State<AuthCheck> {
   }
 
   Future<void> _checkAuth() async {
-    try {
-      final user = await Amplify.Auth.getCurrentUser();
-      if (mounted) {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => const HomeScreen()),
-        );
-      }
-    } catch (_) {
-      if (mounted) {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => const SignInScreen()),
-        );
-      }
-    }
+    final loggedIn = await AuthService.isLoggedIn();
+    if (!mounted) return;
+
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(
+        builder: (_) => loggedIn ? const HomeScreen() : const SignInScreen(),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return const Scaffold(
-      body: Center(
-        child: CircularProgressIndicator(),
-      ),
+      body: Center(child: CircularProgressIndicator()),
     );
   }
 }

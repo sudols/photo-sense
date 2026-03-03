@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:amplify_flutter/amplify_flutter.dart';
-import '../models/Photo.dart';
+import '../models/photo.dart';
 
-/// Grid item displaying a photo thumbnail from S3
-class PhotoGridItem extends StatefulWidget {
+/// Grid item displaying a photo thumbnail.
+/// URL comes from photo.url (presigned, from Django serializer).
+class PhotoGridItem extends StatelessWidget {
   final Photo photo;
   final VoidCallback onTap;
 
@@ -14,64 +14,27 @@ class PhotoGridItem extends StatefulWidget {
   });
 
   @override
-  State<PhotoGridItem> createState() => _PhotoGridItemState();
-}
-
-class _PhotoGridItemState extends State<PhotoGridItem> {
-  String? _imageUrl;
-  bool _isLoading = true;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadImageUrl();
-  }
-
-  Future<void> _loadImageUrl() async {
-    try {
-      final result = await Amplify.Storage.getUrl(
-        path: StoragePath.fromString(widget.photo.s3Key),
-      ).result;
-      if (mounted) {
-        setState(() {
-          _imageUrl = result.url.toString();
-          _isLoading = false;
-        });
-      }
-    } catch (e) {
-      safePrint('Error loading image URL: $e');
-      if (mounted) setState(() => _isLoading = false);
-    }
-  }
-
-  @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
 
     return GestureDetector(
-      onTap: widget.onTap,
+      onTap: onTap,
       child: Stack(
         fit: StackFit.expand,
         children: [
-          // Image
-          if (_isLoading)
-            Center(
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                color: colorScheme.primary,
-              ),
-            )
-          else if (_imageUrl != null)
+          if (photo.url != null)
             Image.network(
-              _imageUrl!,
+              photo.url!,
               fit: BoxFit.cover,
               errorBuilder: (context, error, stackTrace) => Center(
-                child: Icon(Icons.broken_image_outlined, color: colorScheme.onSurfaceVariant, size: 40),
+                child: Icon(Icons.broken_image_outlined,
+                    color: colorScheme.onSurfaceVariant, size: 40),
               ),
             )
           else
             Center(
-              child: Icon(Icons.image_not_supported_outlined, color: colorScheme.onSurfaceVariant, size: 40),
+              child: Icon(Icons.image_not_supported_outlined,
+                  color: colorScheme.onSurfaceVariant, size: 40),
             ),
 
           // Bottom overlay with info
@@ -84,24 +47,26 @@ class _PhotoGridItemState extends State<PhotoGridItem> {
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
-                  colors: [Colors.transparent, Colors.black.withValues(alpha: 0.7)],
+                  colors: [
+                    Colors.transparent,
+                    Colors.black.withValues(alpha: 0.7),
+                  ],
                 ),
               ),
-              padding: const EdgeInsets.all(4), // Reduced padding
+              padding: const EdgeInsets.all(4),
               child: Row(
                 children: [
-                  if (widget.photo.facesCount != null && widget.photo.facesCount! > 0) ...[
+                  if (photo.facesCount > 0) ...[
                     const Icon(Icons.face, color: Colors.white, size: 12),
                     const SizedBox(width: 4),
-                    Text(
-                      '${widget.photo.facesCount}',
-                      style: const TextStyle(color: Colors.white, fontSize: 10),
-                    ),
+                    Text('${photo.facesCount}',
+                        style:
+                            const TextStyle(color: Colors.white, fontSize: 10)),
                     const SizedBox(width: 8),
                   ],
-                  if (widget.photo.detectedText != null && widget.photo.detectedText!.isNotEmpty) ...[
-                    const Icon(Icons.text_fields, color: Colors.white, size: 12),
-                  ],
+                  if (photo.detectedText.isNotEmpty)
+                    const Icon(Icons.text_fields,
+                        color: Colors.white, size: 12),
                 ],
               ),
             ),
