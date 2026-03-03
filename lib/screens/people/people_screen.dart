@@ -1,10 +1,6 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:amplify_flutter/amplify_flutter.dart';
-import 'package:amplify_api/amplify_api.dart';
-import 'package:amplify_storage_s3/amplify_storage_s3.dart';
-import '../../models/Person.dart';
-import '../../models/PhotoPerson.dart';
+import '../../models/person.dart';
+import '../../services/person_service.dart';
 import '../../widgets/face_avatar.dart';
 import '../../widgets/profile_menu_button.dart';
 import 'person_detail_screen.dart';
@@ -20,20 +16,16 @@ class PeopleScreen extends StatefulWidget {
 class _PeopleScreenState extends State<PeopleScreen> {
   List<Person> _people = [];
   bool _isLoading = true;
-  final Map<String, String> _thumbnailUrls = {};
 
   @override
   void initState() {
     super.initState();
     _loadPeople();
-    _cleanupOrphans();
   }
 
   Future<void> _loadPeople() async {
     try {
-      final request = ModelQueries.list(Person.classType);
-      final response = await Amplify.API.query(request: request).response;
-      final people = response.data?.items.whereType<Person>().toList() ?? [];
+      final people = await PersonService.listPersons();
 
       // Sort by name
       people.sort((a, b) => a.name.compareTo(b.name));
@@ -43,90 +35,29 @@ class _PeopleScreenState extends State<PeopleScreen> {
           _people = people;
           _isLoading = false;
         });
-        _loadThumbnails(people);
       }
     } catch (e) {
-      safePrint('Error loading people: $e');
+      debugPrint('Error loading people: $e');
       if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  Future<void> _loadThumbnails(List<Person> people) async {
-    for (var person in people) {
-      if (person.thumbnailS3Key != null && !_thumbnailUrls.containsKey(person.id)) {
-        try {
-          final result = await Amplify.Storage.getUrl(
-            path: StoragePath.fromString(person.thumbnailS3Key!),
-          ).result;
-          if (mounted) {
-            setState(() {
-              _thumbnailUrls[person.id] = result.url.toString();
-            });
-          }
-        } catch (e) {
-          safePrint('Error loading thumbnail for ${person.name}: $e');
-        }
-      }
-    }
-  }
-
-  Future<void> _cleanupOrphans() async {
-      try {
-          // Get all people
-          final request = ModelQueries.list(Person.classType);
-          final response = await Amplify.API.query(request: request).response;
-          final allPeople = response.data?.items.whereType<Person>().toList() ?? [];
-
-          int deletedCount = 0;
-          for (var person in allPeople) {
-             // Check connection count
-             // Note: Ideally we'd do a filtered query for PhotoPerson, but we can't do "count" easily without fetching.
-             // Given typical scale, querying links for each person is okay-ish, or we could fetch ALL PhotoPersons and map them.
-             // Fetching all PhotoPersons might be heavy if there are thousands.
-             // Let's check individually for now.
-             final linkReq = ModelQueries.list(PhotoPerson.classType, where: PhotoPerson.PERSONID.eq(person.id));
-             final linkRes = await Amplify.API.query(request: linkReq).response;
-             
-             if (linkRes.data == null || linkRes.data!.items.isEmpty) {
-                 // Orphan found!
-                 safePrint('Deleting orphan: ${person.name} (${person.id})');
-                 await Amplify.API.mutate(request: ModelMutations.delete(person));
-                 deletedCount++;
-             }
-          }
-
-          if (deletedCount > 0) {
-              safePrint('Cleaned up $deletedCount orphan person records');
-              // Reload
-              if (mounted) _loadPeople();
-          }
-
-      } catch (e) {
-          safePrint('Error during orphan cleanup: $e');
-      }
-  }
-
-  Future<void> _handleRefresh() async {
-      await _loadPeople();
-      await _cleanupOrphans();
-  }
-
   @override
   Widget build(BuildContext context) {
-    final namedPeople = _people.where((p) => p.isUnnamed != true).toList();
-    final unnamedPeople = _people.where((p) => p.isUnnamed == true).toList();
+    final namedPeople = _people.where((p) => !p.isUnnamed).toList();
+    final unnamedPeople = _people.where((p) => p.isUnnamed).toList();
 
     return Scaffold(
       appBar: AppBar(
-          actions: [
-              ProfileMenuButton(userEmail: widget.userEmail),
-              const SizedBox(width: 8),
-          ],
+        actions: [
+          ProfileMenuButton(userEmail: widget.userEmail),
+          const SizedBox(width: 8),
+        ],
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : RefreshIndicator(
-              onRefresh: _handleRefresh,
+              onRefresh: _loadPeople,
               child: CustomScrollView(
                 physics: const AlwaysScrollableScrollPhysics(),
                 slivers: [
@@ -136,52 +67,52 @@ class _PeopleScreenState extends State<PeopleScreen> {
                     )
                   else ...[
                     if (unnamedPeople.isNotEmpty) ...[
-                       SliverPadding(
-                         padding: const EdgeInsets.only(top: 16, bottom: 8, left: 16),
-                         sliver: SliverToBoxAdapter(
-                           child: Text("Who's this?", style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
-                         ),
-                       ),
-                       SliverToBoxAdapter(
-                         child: SizedBox(
-                           height: 140, // Height for avatar + text
-                           child: ListView.separated(
-                             padding: const EdgeInsets.symmetric(horizontal: 16),
-                             scrollDirection: Axis.horizontal,
-                             itemCount: unnamedPeople.length,
-                             separatorBuilder: (context, index) => const SizedBox(width: 16),
-                             itemBuilder: (context, index) => SizedBox(
-                               width: 100, // Fixed width for item
-                               child: _buildPersonItem(unnamedPeople[index], showName: false),
-                             ),
-                           ),
-                         ),
-                       ),
-                       const SliverToBoxAdapter(child: Divider(height: 32)),
+                      SliverPadding(
+                        padding: const EdgeInsets.only(top: 16, bottom: 8, left: 16),
+                        sliver: SliverToBoxAdapter(
+                          child: Text("Who's this?", style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
+                        ),
+                      ),
+                      SliverToBoxAdapter(
+                        child: SizedBox(
+                          height: 140,
+                          child: ListView.separated(
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            scrollDirection: Axis.horizontal,
+                            itemCount: unnamedPeople.length,
+                            separatorBuilder: (context, index) => const SizedBox(width: 16),
+                            itemBuilder: (context, index) => SizedBox(
+                              width: 100,
+                              child: _buildPersonItem(unnamedPeople[index], showName: false),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SliverToBoxAdapter(child: Divider(height: 32)),
                     ],
-                    
+
                     if (namedPeople.isNotEmpty) ...[
-                       SliverPadding(
-                         padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-                         sliver: SliverToBoxAdapter(
-                           child: Text("People", style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
-                         ),
-                       ),
-                       SliverPadding(
-                         padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-                         sliver: SliverGrid(
-                           gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                              crossAxisCount: 3,
-                              crossAxisSpacing: 16,
-                              mainAxisSpacing: 16,
-                              childAspectRatio: 0.8,
-                           ),
-                           delegate: SliverChildBuilderDelegate(
-                             (context, index) => _buildPersonItem(namedPeople[index]),
-                             childCount: namedPeople.length,
-                           ),
-                         ),
-                       ),
+                      SliverPadding(
+                        padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                        sliver: SliverToBoxAdapter(
+                          child: Text("People", style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
+                        ),
+                      ),
+                      SliverPadding(
+                        padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+                        sliver: SliverGrid(
+                          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 3,
+                            crossAxisSpacing: 16,
+                            mainAxisSpacing: 16,
+                            childAspectRatio: 0.8,
+                          ),
+                          delegate: SliverChildBuilderDelegate(
+                            (context, index) => _buildPersonItem(namedPeople[index]),
+                            childCount: namedPeople.length,
+                          ),
+                        ),
+                      ),
                     ],
                   ]
                 ],
@@ -191,21 +122,15 @@ class _PeopleScreenState extends State<PeopleScreen> {
   }
 
   Widget _buildPersonItem(Person person, {bool showName = true}) {
-    final imageUrl = _thumbnailUrls[person.id];
-    Map<String, dynamic> box = {};
-    
-    if (person.boundingBox != null) {
-      try {
-        box = jsonDecode(person.boundingBox!);
-      } catch (_) {}
-    }
+    final imageUrl = person.thumbnailUrl;
+    final box = person.boundingBox ?? {};
 
     return GestureDetector(
       onTap: () async {
-         await Navigator.of(context).push(
-           MaterialPageRoute(builder: (_) => PersonDetailScreen(person: person)),
-         );
-         _loadPeople(); // Refresh on return (in case of rename/merge)
+        await Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => PersonDetailScreen(person: person)),
+        );
+        _loadPeople(); // Refresh on return (in case of rename/merge)
       },
       child: Column(
         children: [
@@ -214,25 +139,25 @@ class _PeopleScreenState extends State<PeopleScreen> {
               child: Stack(
                 children: [
                   imageUrl != null && box.isNotEmpty
-                      ? FaceAvatar( // Use FaceAvatar if we have box
+                      ? FaceAvatar(
                           imageUrl: imageUrl,
                           boundingBox: box,
-                          size: 100, 
+                          size: 100,
                           showLabel: false,
                         )
-                      : CircleAvatar( // Fallback
+                      : CircleAvatar(
                           radius: 40,
                           backgroundImage: imageUrl != null ? NetworkImage(imageUrl) : null,
                           child: imageUrl == null ? const Icon(Icons.person, size: 40) : null,
                         ),
-                  if (person.isUnnamed == true)
+                  if (person.isUnnamed)
                     Positioned(
                       right: 0,
                       bottom: 0,
                       child: Container(
                         padding: const EdgeInsets.all(4),
                         decoration: const BoxDecoration(
-                          color: Colors.blue, // Theme primary? or blue/green
+                          color: Colors.blue,
                           shape: BoxShape.circle,
                         ),
                         child: const Icon(Icons.add, size: 16, color: Colors.white),
@@ -247,8 +172,8 @@ class _PeopleScreenState extends State<PeopleScreen> {
             Text(
               person.name,
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                fontWeight: person.isUnnamed == true ? FontWeight.normal : FontWeight.bold,
-                fontStyle: person.isUnnamed == true ? FontStyle.italic : FontStyle.normal,
+                fontWeight: person.isUnnamed ? FontWeight.normal : FontWeight.bold,
+                fontStyle: person.isUnnamed ? FontStyle.italic : FontStyle.normal,
               ),
               textAlign: TextAlign.center,
               overflow: TextOverflow.ellipsis,

@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:amplify_flutter/amplify_flutter.dart';
 import '../services/auth_service.dart';
 import '../screens/auth/sign_in_screen.dart';
 
@@ -34,7 +33,7 @@ class _ProfileMenuButtonState extends State<ProfileMenuButton> {
 
     if (confirm != true) return;
 
-    await AuthService.signOut();
+    await AuthService.logout();
     if (mounted) {
       Navigator.of(context).pushAndRemoveUntil(
         MaterialPageRoute(builder: (_) => const SignInScreen()),

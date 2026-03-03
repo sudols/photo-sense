@@ -1,35 +1,25 @@
-import 'package:amplify_flutter/amplify_flutter.dart';
-import 'package:amplify_auth_cognito/amplify_auth_cognito.dart';
-import 'package:amplify_storage_s3/amplify_storage_s3.dart';
-import 'package:amplify_api/amplify_api.dart';
 import 'package:flutter/material.dart';
-import 'models/ModelProvider.dart';
 import 'screens/auth/sign_in_screen.dart';
 import 'screens/home/home_screen.dart';
+import 'services/api_client.dart';
+import 'services/auth_service.dart';
 import 'theme/app_theme.dart';
-import 'amplify_outputs.dart';
 
-Future<void> main() async {
+final navigatorKey = GlobalKey<NavigatorState>();
+
+void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  await _configureAmplify();
-  runApp(const PhotoSenseApp());
-}
 
-Future<void> _configureAmplify() async {
-  try {
-    final auth = AmplifyAuthCognito();
-    final storage = AmplifyStorageS3();
-    final api = AmplifyAPI(
-      options: APIPluginOptions(modelProvider: ModelProvider.instance),
+  // On 401, clear tokens and redirect to sign-in.
+  ApiClient.onUnauthorized = () async {
+    await ApiClient.clearTokens();
+    navigatorKey.currentState?.pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const SignInScreen()),
+      (route) => false,
     );
+  };
 
-    await Amplify.addPlugins([auth, storage, api]);
-    await Amplify.configure(amplifyConfig);
-
-    safePrint('Amplify configured successfully!');
-  } on Exception catch (e) {
-    safePrint('Error configuring Amplify: $e');
-  }
+  runApp(const PhotoSenseApp());
 }
 
 class PhotoSenseApp extends StatelessWidget {
@@ -43,6 +33,7 @@ class PhotoSenseApp extends StatelessWidget {
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
       themeMode: ThemeMode.system,
+      navigatorKey: navigatorKey,
       home: const AuthCheck(),
     );
   }
@@ -63,28 +54,20 @@ class _AuthCheckState extends State<AuthCheck> {
   }
 
   Future<void> _checkAuth() async {
-    try {
-      final user = await Amplify.Auth.getCurrentUser();
-      if (mounted) {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => const HomeScreen()),
-        );
-      }
-    } catch (_) {
-      if (mounted) {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => const SignInScreen()),
-        );
-      }
-    }
+    final loggedIn = await AuthService.isLoggedIn();
+    if (!mounted) return;
+
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(
+        builder: (_) => loggedIn ? const HomeScreen() : const SignInScreen(),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return const Scaffold(
-      body: Center(
-        child: CircularProgressIndicator(),
-      ),
+      body: Center(child: CircularProgressIndicator()),
     );
   }
 }

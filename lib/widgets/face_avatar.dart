@@ -84,7 +84,7 @@ class FaceAvatar extends StatelessWidget {
               ),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.1),
+                  color: Colors.black.withValues(alpha: 0.1),
                   blurRadius: 4,
                   offset: const Offset(0, 2),
                 ),
@@ -152,7 +152,7 @@ class FaceAvatar extends StatelessWidget {
                 return Center(child: CircularProgressIndicator(strokeWidth: 2));
               },
               
-              errorBuilder: (_,__,___) => const Icon(Icons.person, color: Colors.grey),
+              errorBuilder: (_, e, st) => const Icon(Icons.person, color: Colors.grey),
             ),
           ),
           if (showLabel) ...[

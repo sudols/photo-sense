@@ -1,11 +1,8 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:amplify_flutter/amplify_flutter.dart';
-import 'package:amplify_api/amplify_api.dart';
-import 'package:amplify_storage_s3/amplify_storage_s3.dart';
-import '../../models/Photo.dart';
-import '../../models/Person.dart';
-import '../../models/PhotoPerson.dart';
+import '../../models/photo.dart';
+import '../../models/person.dart';
+import '../../services/photo_service.dart';
+import '../../services/person_service.dart';
 import '../people/name_face_dialog.dart';
 import '../../widgets/face_avatar.dart';
 
@@ -20,84 +17,57 @@ class PhotoDetailScreen extends StatefulWidget {
 }
 
 class _PhotoDetailScreenState extends State<PhotoDetailScreen> {
-  String? _imageUrl;
-  bool _isLoading = true;
   bool _isDeleting = false;
   Map<String, Person> _facePersons = {}; // Map faceId -> Person
-    
+
   @override
   void initState() {
     super.initState();
-    _loadImageUrl();
     _loadFaceData();
   }
 
   Future<void> _loadFaceData() async {
-    if (widget.photo.detectedFaces == null) return;
-    
+    if (widget.photo.detectedFaces.isEmpty) return;
+
     try {
-       final faceIds = widget.photo.detectedFaces!.map((f) {
-          try {
-            return jsonDecode(f)['faceId'] as String;
-          } catch(_) {
-            return "";
+      final faceIds = widget.photo.detectedFaces
+          .map((f) => f['face_id'] as String?)
+          .where((id) => id != null && id.isNotEmpty)
+          .cast<String>()
+          .toList();
+
+      if (faceIds.isEmpty) return;
+
+      final persons = await PersonService.listPersons();
+
+      final newMap = <String, Person>{};
+      for (var person in persons) {
+        for (var faceId in faceIds) {
+          if (person.faceIds.contains(faceId)) {
+            newMap[faceId] = person;
           }
-       }).where((id) => id.isNotEmpty).toList();
+        }
+      }
 
-       if (faceIds.isEmpty) return;
-       
-       // Ideally query by list of IDs. For now list all.
-       final request = ModelQueries.list(Person.classType);
-       final response = await Amplify.API.query(request: request).response;
-       final persons = response.data?.items.whereType<Person>().toList() ?? [];
-
-       final newMap = <String, Person>{};
-       for (var person in persons) {
-         if (person.faceIds != null) {
-           for (var faceId in faceIds) {
-             if (person.faceIds!.contains(faceId)) {
-               newMap[faceId] = person;
-             }
-           }
-         }
-       }
-
-       if (mounted) {
-         setState(() {
-           _facePersons = newMap;
-         });
-       }
-    } catch (e) {
-      safePrint('Error loading face data: $e');
-    }
-  }
-
-  Future<void> _loadImageUrl() async {
-    try {
-      final result = await Amplify.Storage.getUrl(
-        path: StoragePath.fromString(widget.photo.s3Key),
-      ).result;
       if (mounted) {
         setState(() {
-          _imageUrl = result.url.toString();
-          _isLoading = false;
+          _facePersons = newMap;
         });
       }
     } catch (e) {
-      safePrint('Error loading image URL: $e');
-      if (mounted) setState(() => _isLoading = false);
+      debugPrint('Error loading face data: $e');
     }
   }
 
   Future<void> _handleFaceTap(String faceId, String? existingName, Map<String, dynamic> boundingBox) async {
     Person? knownPerson = _facePersons[faceId];
-    
-    if (knownPerson != null && knownPerson.isUnnamed != true) {
-        // Already named — just show confirmation
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('This is ${knownPerson.name}')),
-        );
-        return;
+
+    if (knownPerson != null && !knownPerson.isUnnamed) {
+      // Already named — just show confirmation
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('This is ${knownPerson.name}')),
+      );
+      return;
     }
 
     // Unnamed or unknown — let user name them
@@ -110,113 +80,22 @@ class _PhotoDetailScreenState extends State<PhotoDetailScreen> {
       ),
     );
 
-    if (name != null && name.isNotEmpty) {
-       await _savePersonDocs([faceId], [widget.photo], name, jsonEncode(boundingBox), existingPerson: knownPerson);
-    }
-  }
-
-  Future<void> _savePersonDocs(List<String> faceIds, List<Photo> photos, String name, String boundingBoxString, {Person? existingPerson}) async {
-    setState(() => _isLoading = true);
-    try {
-      // Check if target name exists
-      final request = ModelQueries.list(Person.classType);
-      final response = await Amplify.API.query(request: request).response;
-      final persons = response.data?.items.where((p) => p != null).cast<Person>() ?? [];
-      
-      Person? targetPerson;
+    if (name != null && name.isNotEmpty && knownPerson != null) {
       try {
-        targetPerson = persons.firstWhere((p) => p.name.toLowerCase() == name.toLowerCase());
-      } catch (_) {}
-
-      // LOGIC:
-      // 1. If existingPerson (Source) is Unnamed:
-      //    a. If targetPerson (Target) exists: MERGE Source -> Target.
-      //    b. If targetPerson does not exist: RENAME Source -> Name.
-      // 2. If existingPerson is null (New):
-      //    a. If targetPerson exists: ADD faces to Target.
-      //    b. If targetPerson does not exist: CREATE new Person.
-
-      if (existingPerson != null && existingPerson.isUnnamed == true) {
-         // Case 1: Renaming/Merging an Unnamed Person
-         if (targetPerson != null) {
-            // 1a. Merge
-            safePrint("Merging ${existingPerson.name} into ${targetPerson.name}");
-            
-            // Move faces
-            final combinedFaces = {...(targetPerson.faceIds ?? []), ...(existingPerson.faceIds ?? []), ...faceIds}.toList();
-            
-            // Move Photo links
-            // We need to find all PhotoPerson links for existingPerson and update them to targetPerson
-            final linksReq = ModelQueries.list(PhotoPerson.classType, where: PhotoPerson.PERSONID.eq(existingPerson.id));
-            final linksRes = await Amplify.API.query(request: linksReq).response;
-            final links = linksRes.data?.items.whereType<PhotoPerson>().toList() ?? [];
-            
-            for (var link in links) {
-                // Delete old, create new (cannot update PK fields usually, or relationship fields might be restricted)
-                // Actually PhotoPerson IDs are independent. We can probably just update personId?
-                // Amplify Gen 2: fields are immutable if they are PK. PhotoPerson ID is primary. personId is not PK, but it is a connection.
-                // Safest: Delete and Create.
-                await Amplify.API.mutate(request: ModelMutations.delete(link));
-                await Amplify.API.mutate(request: ModelMutations.create(
-                    PhotoPerson(photoId: link.photoId, personId: targetPerson.id)
-                ));
-            }
-            
-            // Update Target
-            await Amplify.API.mutate(request: ModelMutations.update(targetPerson.copyWith(faceIds: combinedFaces)));
-            
-            // Delete Source
-            await Amplify.API.mutate(request: ModelMutations.delete(existingPerson));
-            
-            if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Merged into ${targetPerson.name}')));
-            
-         } else {
-           // 1b. Rename
-           final updated = existingPerson.copyWith(name: name, isUnnamed: false);
-           await Amplify.API.mutate(request: ModelMutations.update(updated));
-           if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Renamed to $name')));
-         }
-      } else {
-         // Case 2: Standard matching
-         if (targetPerson != null) {
-            // 2a. Update existing
-            final currentFaceIds = targetPerson.faceIds ?? [];
-            final newFaceIds = {...currentFaceIds, ...faceIds}.toList();
-            if (newFaceIds.length > currentFaceIds.length) {
-                await Amplify.API.mutate(request: ModelMutations.update(targetPerson.copyWith(faceIds: newFaceIds)));
-            }
-         } else {
-             // 2b. Create new
-            targetPerson = Person(
-                name: name,
-                faceId: faceIds.first,
-                faceIds: faceIds,
-                boundingBox: boundingBoxString,
-                thumbnailS3Key: photos.first.s3Key,
-            );
-            final res = await Amplify.API.mutate(request: ModelMutations.create(targetPerson)).response;
-            targetPerson = res.data;
-         }
-         
-         // Link photos (if not already linked)
-         if (targetPerson != null) {
-            for (var photo in photos) {
-                 final link = PhotoPerson(photoId: photo.id, personId: targetPerson!.id);
-                 try {
-                     await Amplify.API.mutate(request: ModelMutations.create(link));
-                 } catch (_) {}
-            }
-            if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Tagged ${photos.length} photos')));
-         }
+        await PersonService.renamePerson(knownPerson.id, name);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Renamed to $name')),
+          );
+          _loadFaceData(); // Refresh
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error: $e')),
+          );
+        }
       }
-
-      if (mounted) _loadFaceData(); // Refresh
-
-    } catch (e) {
-      safePrint('Error saving person: $e');
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -242,85 +121,19 @@ class _PhotoDetailScreenState extends State<PhotoDetailScreen> {
     setState(() => _isDeleting = true);
 
     try {
-      // 1. Get all PhotoPerson links for this photo
-      final linksReq = ModelQueries.list(
-          PhotoPerson.classType,
-          where: PhotoPerson.PHOTOID.eq(widget.photo.id)
-      );
-      final linksRes = await Amplify.API.query(request: linksReq).response;
-      final links = linksRes.data?.items.whereType<PhotoPerson>().toList() ?? [];
-
-      // 2. Process each person link
-      for (var link in links) {
-          final personId = link.personId;
-          
-          // Delete the PhotoPerson link
-          await Amplify.API.mutate(request: ModelMutations.delete(link));
-
-          // Check if this person has other photos
-          final checkReq = ModelQueries.list(
-              PhotoPerson.classType,
-              where: PhotoPerson.PERSONID.eq(personId)
-          );
-          final checkRes = await Amplify.API.query(request: checkReq).response;
-          final remainingLinks = checkRes.data?.items.whereType<PhotoPerson>().toList() ?? [];
-
-          if (remainingLinks.isEmpty) {
-              // No more photos for this person -> Delete Person
-              // First fetch the person to get version if needed, or just delete by ID if model allows 
-              // (ModelMutations.deleteById is not standard in this version, usually need model instance)
-              // We'll try to fetch first to be safe and compatible
-              final pReq = ModelQueries.get(Person.classType, PersonModelIdentifier(id: personId));
-              final pRes = await Amplify.API.query(request: pReq).response;
-              if (pRes.data != null) {
-                  await Amplify.API.mutate(request: ModelMutations.delete(pRes.data!));
-                  safePrint('Deleted orphaned person: ${pRes.data!.name}');
-              }
-          } else {
-              // Person still has photos. Check if we need to update thumbnail.
-              // We do this if the deleted photo key matches the person's thumbnail key.
-              final pReq = ModelQueries.get(Person.classType, PersonModelIdentifier(id: personId));
-              final pRes = await Amplify.API.query(request: pReq).response;
-              final person = pRes.data;
-              
-              if (person != null && person.thumbnailS3Key == widget.photo.s3Key) {
-                   // Pick a new thumbnail from remaining photos
-                   // We need the photo for the first remaining link
-                   try {
-                       final firstLink = remainingLinks.first;
-                       final newPhotoReq = ModelQueries.get(Photo.classType, PhotoModelIdentifier(id: firstLink.photoId));
-                       final newPhotoRes = await Amplify.API.query(request: newPhotoReq).response;
-                       if (newPhotoRes.data != null) {
-                           final updatedPerson = person.copyWith(thumbnailS3Key: newPhotoRes.data!.s3Key);
-                           await Amplify.API.mutate(request: ModelMutations.update(updatedPerson));
-                           safePrint('Updated thumbnail for person: ${person.name}');
-                       }
-                   } catch (e) {
-                       safePrint('Failed to update thumbnail: $e');
-                   }
-              }
-          }
-      }
-
-      // 3. Delete from S3
-      await Amplify.Storage.remove(
-        path: StoragePath.fromString(widget.photo.s3Key),
-      ).result;
-
-      // 4. Delete the Photo itself
-      await Amplify.API.mutate(request: ModelMutations.delete(widget.photo)).response;
+      await PhotoService.deletePhoto(widget.photo.id);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: const Text('Photo deleted and connections cleaned up'),
+            content: const Text('Photo deleted'),
             backgroundColor: Theme.of(context).colorScheme.primary,
           ),
         );
         Navigator.of(context).pop(); // Go back to home
       }
     } catch (e) {
-      safePrint('Error deleting photo: $e');
+      debugPrint('Error deleting photo: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -337,6 +150,7 @@ class _PhotoDetailScreenState extends State<PhotoDetailScreen> {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
+    final imageUrl = widget.photo.url;
 
     return Scaffold(
       appBar: AppBar(
@@ -355,29 +169,26 @@ class _PhotoDetailScreenState extends State<PhotoDetailScreen> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             // Photo
-            // Photo with Bounding Boxes
             AspectRatio(
               aspectRatio: 1,
-              child: _isLoading
-                  ? Center(child: CircularProgressIndicator(color: colorScheme.primary))
-                  : _imageUrl != null
-                      ? Image.network(
-                          _imageUrl!,
-                          fit: BoxFit.contain,
-                          errorBuilder: (context, error, stackTrace) => Center(
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(Icons.broken_image_outlined, size: 64, color: colorScheme.onSurfaceVariant),
-                                const SizedBox(height: 8),
-                                Text('Failed to load image', style: TextStyle(color: colorScheme.onSurfaceVariant)),
-                              ],
-                            ),
-                          ),
-                        )
-                      : Center(
-                          child: Icon(Icons.image_not_supported_outlined, size: 64, color: colorScheme.onSurfaceVariant),
+              child: imageUrl != null
+                  ? Image.network(
+                      imageUrl,
+                      fit: BoxFit.contain,
+                      errorBuilder: (context, error, stackTrace) => Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.broken_image_outlined, size: 64, color: colorScheme.onSurfaceVariant),
+                            const SizedBox(height: 8),
+                            Text('Failed to load image', style: TextStyle(color: colorScheme.onSurfaceVariant)),
+                          ],
                         ),
+                      ),
+                    )
+                  : Center(
+                      child: Icon(Icons.image_not_supported_outlined, size: 64, color: colorScheme.onSurfaceVariant),
+                    ),
             ),
 
             // Analysis results
@@ -386,39 +197,36 @@ class _PhotoDetailScreenState extends State<PhotoDetailScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  
                   // Identified Faces List
-                  if (widget.photo.detectedFaces != null && widget.photo.detectedFaces!.isNotEmpty) ...[
-                     Text('Identified Faces', style: textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
-                     const SizedBox(height: 12),
-                     SizedBox(
-                       height: 90, // Enough for avatar + text
-                       child: ListView.separated(
-                         scrollDirection: Axis.horizontal,
-                         itemCount: widget.photo.detectedFaces!.length,
-                         separatorBuilder: (context, index) => const SizedBox(width: 16),
-                         itemBuilder: (context, index) {
-                           try {
-                             final face = jsonDecode(widget.photo.detectedFaces![index]);
-                             final faceId = face['faceId'] as String;
-                             final box = face['boundingBox'];
-                             final personName = _facePersons[faceId]?.name;
-                             
-                             return FaceAvatar(
-                               imageUrl: _imageUrl!,
-                               boundingBox: box,
-                               name: personName,
-                               onTap: () => _handleFaceTap(faceId, personName, box),
-                             );
-                           } catch (e) {
-                             return const SizedBox();
-                           }
-                         },
-                       ),
-                     ),
-                     const SizedBox(height: 24),
-                     const Divider(),
-                     const SizedBox(height: 16),
+                  if (widget.photo.detectedFaces.isNotEmpty) ...[
+                    Text('Identified Faces', style: textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      height: 90,
+                      child: ListView.separated(
+                        scrollDirection: Axis.horizontal,
+                        itemCount: widget.photo.detectedFaces.length,
+                        separatorBuilder: (context, index) => const SizedBox(width: 16),
+                        itemBuilder: (context, index) {
+                          final face = widget.photo.detectedFaces[index];
+                          final faceId = face['face_id'] as String? ?? '';
+                          final box = face['bounding_box'] as Map<String, dynamic>? ?? {};
+                          final personName = _facePersons[faceId]?.name;
+
+                          if (faceId.isEmpty || imageUrl == null) return const SizedBox();
+
+                          return FaceAvatar(
+                            imageUrl: imageUrl,
+                            boundingBox: box,
+                            name: personName,
+                            onTap: () => _handleFaceTap(faceId, personName, box),
+                          );
+                        },
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    const Divider(),
+                    const SizedBox(height: 16),
                   ],
 
                   Text('Metadata', style: textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
@@ -428,7 +236,7 @@ class _PhotoDetailScreenState extends State<PhotoDetailScreen> {
                   _buildInfoCard(
                     icon: Icons.face,
                     title: 'Faces Detected',
-                    value: widget.photo.facesCount != null ? '${widget.photo.facesCount}' : 'Not analyzed',
+                    value: '${widget.photo.facesCount}',
                     colorScheme: colorScheme,
                   ),
                   const SizedBox(height: 8),
@@ -437,8 +245,8 @@ class _PhotoDetailScreenState extends State<PhotoDetailScreen> {
                   _buildInfoCard(
                     icon: Icons.text_fields,
                     title: 'Detected Text',
-                    value: widget.photo.detectedText != null && widget.photo.detectedText!.isNotEmpty
-                        ? widget.photo.detectedText!.join(', ')
+                    value: widget.photo.detectedText.isNotEmpty
+                        ? widget.photo.detectedText.join(', ')
                         : 'No text detected',
                     colorScheme: colorScheme,
                   ),
@@ -449,7 +257,7 @@ class _PhotoDetailScreenState extends State<PhotoDetailScreen> {
                     icon: Icons.schedule,
                     title: 'Analyzed At',
                     value: widget.photo.analyzedAt != null
-                        ? widget.photo.analyzedAt!.format()
+                        ? widget.photo.analyzedAt.toString()
                         : 'Pending analysis',
                     colorScheme: colorScheme,
                   ),
@@ -459,9 +267,7 @@ class _PhotoDetailScreenState extends State<PhotoDetailScreen> {
                   _buildInfoCard(
                     icon: Icons.calendar_today,
                     title: 'Uploaded',
-                    value: widget.photo.createdAt != null
-                        ? widget.photo.createdAt!.format()
-                        : 'Unknown',
+                    value: widget.photo.createdAt.toString(),
                     colorScheme: colorScheme,
                   ),
                 ],

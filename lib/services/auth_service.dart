@@ -1,68 +1,66 @@
-import 'package:amplify_flutter/amplify_flutter.dart';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+import '../config.dart';
+import 'api_client.dart';
 
-/// Service for handling authentication with AWS Cognito
 class AuthService {
-  /// Sign in with email and password
-  static Future<AuthUser> signIn(String email, String password) async {
-    try {
-      final result = await Amplify.Auth.signIn(
-        username: email,
-        password: password,
-      );
+  /// Login with email and password.
+  /// Returns the user's email on success, throws on failure.
+  static Future<String> login(String email, String password) async {
+    final response = await http.post(
+      Uri.parse('${AppConfig.apiUrl}/auth/login/'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'username': email, 'password': password}),
+    );
 
-      if (result.isSignedIn) {
-        final user = await Amplify.Auth.getCurrentUser();
-        return user;
-      } else {
-        throw Exception('Sign in failed');
-      }
-    } on AuthException catch (e) {
-      if (e.message.contains('already a user signed in')) {
-        // If a user is already signed in, just return the current user
-        final user = await Amplify.Auth.getCurrentUser();
-        return user;
-      }
-      throw Exception(e.message);
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      await ApiClient.saveTokens(data['access'], data['refresh']);
+      return email;
     }
+
+    final error = _extractError(response);
+    throw Exception(error);
   }
 
-  /// Sign up with email and password
-  static Future<void> signUp(String email, String password) async {
-    try {
-      final result = await Amplify.Auth.signUp(
-        username: email,
-        password: password,
-        options: SignUpOptions(userAttributes: {
-          AuthUserAttributeKey.email: email,
-        }),
-      );
+  /// Register a new account.
+  /// Django's RegisterView expects {email, password}.
+  static Future<void> register(String email, String password) async {
+    final response = await http.post(
+      Uri.parse('${AppConfig.apiUrl}/auth/register/'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'email': email, 'password': password}),
+    );
 
-      if (!result.isSignUpComplete) {
-        // User needs to confirm email
-        throw Exception(
-            'Please check your email for a confirmation code and sign in after verification.');
+    if (response.statusCode == 201) return;
+
+    final error = _extractError(response);
+    throw Exception(error);
+  }
+
+  /// Clear stored tokens.
+  static Future<void> logout() async {
+    await ApiClient.clearTokens();
+  }
+
+  /// Check if we have a stored access token.
+  static Future<bool> isLoggedIn() async {
+    final token = await ApiClient.getAccessToken();
+    return token != null;
+  }
+
+  static String _extractError(http.Response response) {
+    try {
+      final body = jsonDecode(response.body);
+      if (body is Map) {
+        // SimpleJWT returns {"detail": "..."} on error
+        if (body.containsKey('detail')) return body['detail'];
+        // RegisterView returns {"error": "..."}
+        if (body.containsKey('error')) return body['error'];
+        // Field-level errors: {"username": ["..."]}
+        return body.values.first.toString();
       }
-    } on AuthException catch (e) {
-      throw Exception(e.message);
-    }
-  }
-
-  /// Sign out current user
-  static Future<void> signOut() async {
-    try {
-      await Amplify.Auth.signOut();
-    } on AuthException catch (e) {
-      throw Exception(e.message);
-    }
-  }
-
-  /// Get current authenticated user
-  static Future<AuthUser?> getCurrentUser() async {
-    try {
-      final user = await Amplify.Auth.getCurrentUser();
-      return user;
-    } on AuthException {
-      return null;
-    }
+    } catch (_) {}
+    return 'Request failed (${response.statusCode})';
   }
 }
