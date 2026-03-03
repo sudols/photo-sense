@@ -16,11 +16,6 @@ class PersonDetailScreen extends StatefulWidget {
   State<PersonDetailScreen> createState() => _PersonDetailScreenState();
 }
 
-class _PersonDetailScreenState extends State<PersonDetailScreen> {
-  late Person _person;
-  List<Photo> _photos = [];
-  bool _isLoading = true;
-
   @override
   void initState() {
     super.initState();
@@ -59,6 +54,8 @@ class _PersonDetailScreenState extends State<PersonDetailScreen> {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No other people to merge with.')));
       return;
     }
+
+    if (!mounted) return;
 
     // 2. Show Selection Dialog
     final Person? targetPerson = await showDialog<Person>(
@@ -113,6 +110,8 @@ class _PersonDetailScreenState extends State<PersonDetailScreen> {
     );
 
     if (targetPerson == null) return;
+
+    if (!mounted) return;
 
     // 3. Confirm Merge
     final confirm = await showDialog<bool>(
@@ -238,7 +237,7 @@ class _PersonDetailScreenState extends State<PersonDetailScreen> {
                   shape: BoxShape.circle,
                   boxShadow: [
                     BoxShadow(
-                      color: colorScheme.primary.withOpacity(0.2),
+                      color: colorScheme.primary.withValues(alpha: 0.2),
                       blurRadius: 20,
                       spreadRadius: 5,
                     )
@@ -368,3 +367,4 @@ class _PersonDetailScreenState extends State<PersonDetailScreen> {
     );
   }
 }
+                                                          

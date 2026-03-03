@@ -5,11 +5,9 @@ import 'package:flutter_speed_dial/flutter_speed_dial.dart';
 import 'package:flutter_sticky_header/flutter_sticky_header.dart';
 import 'package:intl/intl.dart';
 import '../../models/photo.dart';
-import '../../services/auth_service.dart';
 import '../../services/photo_service.dart';
 import '../../widgets/photo_grid_item.dart';
 import '../../widgets/profile_menu_button.dart';
-import '../auth/sign_in_screen.dart';
 import '../photo/photo_detail_screen.dart';
 import '../people/people_screen.dart';
 import '../search/search_screen.dart';
@@ -23,7 +21,6 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  bool _isUploading = false;
   bool _isLoading = true;
   List<Photo> _photos = [];
   String? _userEmail;
@@ -96,7 +93,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
     if (pickedFiles.isEmpty) return;
 
-    setState(() => _isUploading = true);
     int successCount = 0;
     int failCount = 0;
 
@@ -130,8 +126,6 @@ class _HomeScreenState extends State<HomeScreen> {
           SnackBar(content: Text('Upload process error: $e'), backgroundColor: Colors.red),
         );
       }
-    } finally {
-      if (mounted) setState(() => _isUploading = false);
     }
   }
 
@@ -180,7 +174,7 @@ class _HomeScreenState extends State<HomeScreen> {
                               return SliverStickyHeader(
                                 header: Container(
                                   height: 50,
-                                  color: colorScheme.surface.withOpacity(0.95),
+                                  color: colorScheme.surface.withValues(alpha: 0.95),
                                   padding: const EdgeInsets.symmetric(horizontal: 16),
                                   alignment: Alignment.centerLeft,
                                   child: Text(
@@ -311,7 +305,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
       if (result == null || result.files.isEmpty) return;
 
-      setState(() => _isUploading = true);
       int successCount = 0;
       int failCount = 0;
 
@@ -346,8 +339,6 @@ class _HomeScreenState extends State<HomeScreen> {
       }
     } catch (e) {
       debugPrint('Collection upload error: $e');
-    } finally {
-      if (mounted) setState(() => _isUploading = false);
     }
   }
 
