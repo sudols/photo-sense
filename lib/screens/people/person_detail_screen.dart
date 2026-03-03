@@ -16,6 +16,11 @@ class PersonDetailScreen extends StatefulWidget {
   State<PersonDetailScreen> createState() => _PersonDetailScreenState();
 }
 
+class _PersonDetailScreenState extends State<PersonDetailScreen> {
+  late Person _person;
+  List<Photo> _photos = [];
+  bool _isLoading = true;
+
   @override
   void initState() {
     super.initState();
@@ -367,4 +372,3 @@ class PersonDetailScreen extends StatefulWidget {
     );
   }
 }
-                                                          
