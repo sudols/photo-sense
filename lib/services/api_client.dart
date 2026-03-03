@@ -6,6 +6,10 @@ import '../config.dart';
 class ApiClient {
   static const _storage = FlutterSecureStorage();
 
+  /// Called when a 401 response is received.
+  /// Set in main.dart to clear tokens and redirect to sign-in.
+  static Future<void> Function()? onUnauthorized;
+
   // --- Token management ---
 
   static Future<void> saveTokens(String access, String refresh) async {
@@ -21,6 +25,15 @@ class ApiClient {
     await _storage.deleteAll();
   }
 
+  // --- 401 handling ---
+
+  static Future<http.Response> _checkResponse(http.Response response) async {
+    if (response.statusCode == 401 && onUnauthorized != null) {
+      await onUnauthorized!();
+    }
+    return response;
+  }
+
   // --- Headers ---
 
   static Future<Map<String, String>> _headers({bool json = true}) async {
@@ -34,33 +47,37 @@ class ApiClient {
   // --- HTTP methods ---
 
   static Future<http.Response> get(String path) async {
-    return http.get(
+    final response = await http.get(
       Uri.parse('${AppConfig.apiUrl}$path'),
       headers: await _headers(),
     );
+    return _checkResponse(response);
   }
 
   static Future<http.Response> post(String path, Map<String, dynamic> body) async {
-    return http.post(
+    final response = await http.post(
       Uri.parse('${AppConfig.apiUrl}$path'),
       headers: await _headers(),
       body: jsonEncode(body),
     );
+    return _checkResponse(response);
   }
 
   static Future<http.Response> patch(String path, Map<String, dynamic> body) async {
-    return http.patch(
+    final response = await http.patch(
       Uri.parse('${AppConfig.apiUrl}$path'),
       headers: await _headers(),
       body: jsonEncode(body),
     );
+    return _checkResponse(response);
   }
 
   static Future<http.Response> delete(String path) async {
-    return http.delete(
+    final response = await http.delete(
       Uri.parse('${AppConfig.apiUrl}$path'),
       headers: await _headers(),
     );
+    return _checkResponse(response);
   }
 
   /// Multipart file upload.
@@ -79,6 +96,12 @@ class ApiClient {
     }
 
     request.files.add(await http.MultipartFile.fromPath(fieldName, filePath));
-    return request.send();
+    final response = await request.send();
+
+    if (response.statusCode == 401 && onUnauthorized != null) {
+      await onUnauthorized!();
+    }
+
+    return response;
   }
 }

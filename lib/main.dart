@@ -1,11 +1,24 @@
 import 'package:flutter/material.dart';
 import 'screens/auth/sign_in_screen.dart';
 import 'screens/home/home_screen.dart';
+import 'services/api_client.dart';
 import 'services/auth_service.dart';
 import 'theme/app_theme.dart';
 
+final navigatorKey = GlobalKey<NavigatorState>();
+
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // On 401, clear tokens and redirect to sign-in.
+  ApiClient.onUnauthorized = () async {
+    await ApiClient.clearTokens();
+    navigatorKey.currentState?.pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const SignInScreen()),
+      (route) => false,
+    );
+  };
+
   runApp(const PhotoSenseApp());
 }
 
@@ -20,6 +33,7 @@ class PhotoSenseApp extends StatelessWidget {
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
       themeMode: ThemeMode.system,
+      navigatorKey: navigatorKey,
       home: const AuthCheck(),
     );
   }
