@@ -9,49 +9,6 @@ This file tracks implementation progress and known issues for the PhotoSense app
 - **Status**: Django migration **COMPLETE** and merged to main.
 
 ---
-
-## Completed Features
-
-### Backend (Django REST Framework)
-
-- [x] Django project setup with PostgreSQL (prod) / SQLite (dev)
-- [x] JWT authentication via `djangorestframework-simplejwt`
-- [x] User registration (`POST /api/auth/register/`)
-- [x] User login (`POST /api/auth/login/`) — returns access + refresh tokens
-- [x] Token refresh endpoint (`POST /api/auth/refresh/`)
-- [x] Photo upload with S3 storage (`POST /api/photos/upload/`)
-- [x] Automatic face indexing via AWS Rekognition on upload
-- [x] Automatic OCR text detection via AWS Rekognition on upload
-- [x] Face clustering into Person entities on upload (`_cluster_face`)
-- [x] Photo list, retrieve, delete endpoints
-- [x] Photo search by detected text (`GET /api/photos/search/?q=`)
-- [x] Person list, retrieve, update (rename), delete endpoints
-- [x] Person merge endpoint (`POST /api/persons/{id}/merge/`)
-- [x] Presigned S3 URLs for all photo and person thumbnail access
-- [x] Per-user data isolation (all querysets filtered by `owner`)
-- [x] Django Admin for all models
-- [x] Render.com deployment config (`render.yaml`)
-- [x] Single migration covering all models (`photos/0001_initial.py`)
-
-### Frontend (Flutter)
-
-- [x] Full Amplify removal — zero Amplify imports, dependencies, or files remaining
-- [x] JWT token storage via `flutter_secure_storage`
-- [x] Global 401 handler — clears tokens and redirects to sign-in
-- [x] Sign-in screen (`POST /api/auth/login/`)
-- [x] Sign-up screen (`POST /api/auth/register/`)
-- [x] Home screen — date-grouped photo grid with sticky headers
-- [x] Photo upload via expandable FAB (gallery picker + file picker)
-- [x] Photo delete
-- [x] Photo detail screen — full image, face bounding boxes, detected text, face chips
-- [x] People screen — grid of detected persons (named + unnamed)
-- [x] Person detail screen — profile, all photos, rename, merge, delete
-- [x] Search screen — search by detected text
-- [x] Profile menu with sign-out
-- [x] Material 3 light/dark theme
-
----
-
 ## Known Issues & Technical Debt
 
 ### Critical / High — Address in follow-up
