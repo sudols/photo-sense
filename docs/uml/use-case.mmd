@@ -1,0 +1,56 @@
+graph TB
+    subgraph "PhotoSense System"
+        UC1["Register Account"]
+        UC2["Login"]
+        UC3["Logout"]
+        UC4["Upload Photo<br/>(Single)"]
+        UC5["Upload Collection<br/>(Batch)"]
+        UC6["View Photo Gallery<br/>(Date-Grouped)"]
+        UC7["View Photo Detail"]
+        UC8["Delete Photo"]
+        UC9["Search Photos<br/>(by Detected Text)"]
+        UC10["View People"]
+        UC11["View Person Detail"]
+        UC12["Name a Person"]
+        UC13["Merge Persons"]
+        UC14["Auto-Detect Faces"]
+        UC15["Auto-Extract Text (OCR)"]
+        UC16["Auto-Cluster Faces<br/>into Persons"]
+        UC17["Generate Presigned URL"]
+        UC18["Store Photo in S3"]
+    end
+
+    User((User))
+    System((System<br/>AWS Rekognition<br/>+ S3))
+
+    User --> UC1
+    User --> UC2
+    User --> UC3
+    User --> UC4
+    User --> UC5
+    User --> UC6
+    User --> UC7
+    User --> UC8
+    User --> UC9
+    User --> UC10
+    User --> UC11
+    User --> UC12
+    User --> UC13
+
+    UC4 -.->|includes| UC14
+    UC4 -.->|includes| UC15
+    UC4 -.->|includes| UC16
+    UC4 -.->|includes| UC18
+    UC5 -.->|includes| UC14
+    UC5 -.->|includes| UC15
+    UC5 -.->|includes| UC16
+    UC5 -.->|includes| UC18
+    UC7 -.->|includes| UC17
+    UC6 -.->|includes| UC17
+
+    System --> UC14
+    System --> UC15
+    System --> UC16
+    System --> UC17
+    System --> UC18
+`

@@ -1,0 +1,31 @@
+graph TB
+    subgraph "Client Layer"
+        FA["Flutter App<br/>(Android / Web / Linux)"]
+    end
+
+    subgraph "API Layer"
+        DJ["Django REST Framework<br/>+ SimpleJWT Authentication"]
+    end
+
+    subgraph "Data Layer"
+        PG["PostgreSQL<br/>(Production)"]
+        SQ["SQLite<br/>(Development)"]
+    end
+
+    subgraph "AWS Cloud Services"
+        S3["Amazon S3<br/>(Photo Storage)"]
+        RK["Amazon Rekognition<br/>(Face Detection + OCR)"]
+    end
+
+    FA -->|"REST + JWT<br/>(HTTPS)"| DJ
+    DJ -->|"ORM"| PG
+    DJ -->|"ORM"| SQ
+    DJ -->|"boto3<br/>upload / delete / presign"| S3
+    DJ -->|"boto3<br/>IndexFaces / DetectText / SearchFaces"| RK
+
+    style FA fill:#0553B1,color:#fff
+    style DJ fill:#0C4B33,color:#fff
+    style PG fill:#336791,color:#fff
+    style S3 fill:#FF9900,color:#000
+    style RK fill:#FF9900,color:#000
+`

@@ -1,0 +1,66 @@
+---
+config:
+  look: dark
+---
+sequenceDiagram
+    actor U as User
+    participant FA as Flutter App
+    participant API as Django API<br/>(PhotoUploadView)
+    participant S3 as Amazon S3
+    participant RK as Amazon Rekognition
+    participant DB as Database
+
+    U->>FA: Select photo(s) from device
+    FA->>FA: Read file bytes
+
+    FA->>API: POST /api/photos/upload/<br/>[multipart/form-data + JWT]
+    activate API
+
+    Note over API: image_bytes = file.read()<br/>All subsequent calls use this<br/>single in-memory buffer
+
+    Note over API: Step 1: Upload to S3 (storage)
+    API->>S3: put_object(Bucket, Key, image_bytes, ContentType)
+    S3-->>API: 200 OK
+    Note over API,S3: S3 is done here.<br/>Rekognition does NOT read from S3.
+
+    Note over API: Step 2: Face Detection (from memory)
+    API->>RK: index_faces(CollectionId,<br/>Image={"Bytes": image_bytes})
+    Note over API,RK: Raw bytes sent directly,<br/>NOT an S3 reference
+    RK-->>API: FaceRecords [{FaceId, BoundingBox, Confidence}]
+
+    Note over API: Step 3: Text Extraction / OCR (from memory)
+    API->>RK: detect_text(Image={"Bytes": image_bytes})
+    Note over API,RK: Same in-memory bytes,<br/>NOT an S3 reference
+    RK-->>API: TextDetections [{DetectedText, Confidence, Type}]
+    Note over API: Filter: Type=LINE, Confidence > 80%
+
+    Note over API: Step 4: Save Photo Record
+    API->>DB: Photo.objects.create(owner, s3_key, face_ids,<br/>detected_text, detected_faces, faces_count)
+    DB-->>API: Photo saved
+
+    Note over API: Step 5: Face Clustering (per face)
+    loop For each detected face
+        API->>RK: search_faces(FaceId, Threshold=90%)
+        Note over RK: Searches the Rekognition<br/>face collection (indexed vectors),<br/>NOT S3 images
+        RK-->>API: FaceMatches (best match or empty)
+
+        alt Match found (existing Person)
+            API->>DB: Person.objects.filter(face_ids__contains=matched_id)
+            DB-->>API: Existing Person
+            API->>DB: person.face_ids.append(new_face_id)
+            API->>DB: person.save()
+        else No match (new face)
+            API->>DB: Person.objects.create(name="Unknown Person",<br/>face_id, bounding_box, thumbnail_s3_key, is_unnamed=True)
+            DB-->>API: New Person created
+        end
+
+        API->>DB: PhotoPerson.objects.get_or_create(photo, person)
+    end
+
+    Note over API: Step 6: Return Response
+    API->>DB: Generate presigned URL for s3_key
+    API-->>FA: 201 Created {Photo JSON with presigned URL}
+    deactivate API
+
+    FA->>FA: Parse Photo.fromJson()
+    FA-->>U: Show success SnackBar<br/>Refresh photo grid

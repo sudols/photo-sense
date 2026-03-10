@@ -1,0 +1,49 @@
+erDiagram
+    USER {
+        int id PK
+        string username "email used as username"
+        string email
+        string password "hashed"
+        datetime date_joined
+    }
+
+    PHOTO {
+        uuid id PK
+        int owner_id FK "references USER.id"
+        string s3_key "S3 object path"
+        json face_ids "list of Rekognition FaceIds"
+        json detected_text "list of OCR text strings"
+        json detected_faces "list of face_id + bounding_box + confidence"
+        int faces_count
+        datetime analyzed_at
+        datetime created_at
+        datetime updated_at
+    }
+
+    PERSON {
+        uuid id PK
+        int owner_id FK "references USER.id"
+        string name "default: Unknown Person"
+        string face_id "primary Rekognition FaceId"
+        json face_ids "all FaceIds for this person"
+        json bounding_box "Left Top Width Height"
+        string thumbnail_s3_key "S3 key of thumbnail photo"
+        boolean is_unnamed "true until user names them"
+        datetime created_at
+        datetime updated_at
+    }
+
+    PHOTOPERSON {
+        uuid id PK
+        uuid photo_id FK "references PHOTO.id"
+        uuid person_id FK "references PERSON.id"
+        int owner_id FK "references USER.id"
+        datetime created_at
+    }
+
+    USER ||--o{ PHOTO : "owns"
+    USER ||--o{ PERSON : "owns"
+    USER ||--o{ PHOTOPERSON : "owns"
+    PHOTO ||--o{ PHOTOPERSON : "appears_in"
+    PERSON ||--o{ PHOTOPERSON : "identified_as"
+    PHOTO }o--o{ PERSON : "many-to-many via PHOTOPERSON"
