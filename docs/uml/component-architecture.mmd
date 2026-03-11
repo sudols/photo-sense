@@ -1,0 +1,47 @@
+graph TB
+    subgraph "User Device"
+        subgraph "Flutter Application"
+            UI["UI Layer<br/>Screens + Widgets"]
+            SVC["Service Layer<br/>ApiClient, AuthService,<br/>PhotoService, PersonService"]
+        end
+    end
+
+    subgraph "Render.com (Cloud)"
+        subgraph "Django Backend"
+            GUN["Gunicorn<br/>(WSGI Server)"]
+            DRF["Django REST Framework<br/>(Views + Serializers)"]
+            JWT["SimpleJWT<br/>(Authentication)"]
+            ORM["Django ORM<br/>(Models)"]
+            ML["ML Module<br/>(ml.py - boto3)"]
+            STR["Storage Module<br/>(storage.py - boto3)"]
+        end
+        PG["PostgreSQL<br/>(Managed Database)"]
+    end
+
+    subgraph "AWS Cloud"
+        S3["Amazon S3<br/>(Photo Bucket)"]
+        RK["Amazon Rekognition<br/>(Face Collection)"]
+    end
+
+    UI --> SVC
+    SVC -->|"HTTPS REST"| GUN
+    GUN --> DRF
+    DRF --> JWT
+    DRF --> ORM
+    DRF --> ML
+    DRF --> STR
+    ORM -->|"SQL"| PG
+    ML -->|"boto3 API"| RK
+    STR -->|"boto3 API"| S3
+
+    style UI fill:#0553B1,color:#fff
+    style SVC fill:#0553B1,color:#fff
+    style GUN fill:#0C4B33,color:#fff
+    style DRF fill:#0C4B33,color:#fff
+    style JWT fill:#0C4B33,color:#fff
+    style ORM fill:#0C4B33,color:#fff
+    style ML fill:#0C4B33,color:#fff
+    style STR fill:#0C4B33,color:#fff
+    style PG fill:#336791,color:#fff
+    style S3 fill:#FF9900,color:#000
+    style RK fill:#FF9900,color:#000
