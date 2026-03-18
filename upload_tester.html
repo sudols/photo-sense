@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PhotoSense - Upload Tester</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        .header h1 { font-size: 28px; margin-bottom: 8px; }
+        .header p { opacity: 0.9; font-size: 14px; }
+        .content { padding: 30px; }
+        .section {
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 20px;
+        }
+        .section h2 {
+            font-size: 18px;
+            margin-bottom: 16px;
+            color: #333;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #555;
+            font-size: 14px;
+        }
+        input[type="email"],
+        input[type="password"],
+        input[type="text"] {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #e1e4e8;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: all 0.3s;
+        }
+        input:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+        .file-input-wrapper {
+            position: relative;
+            display: inline-block;
+            width: 100%;
+        }
+        input[type="file"] {
+            display: none;
+        }
+        .file-label {
+            display: block;
+            padding: 12px 16px;
+            background: white;
+            border: 2px dashed #667eea;
+            border-radius: 8px;
+            cursor: pointer;
+            text-align: center;
+            transition: all 0.3s;
+            color: #667eea;
+            font-weight: 600;
+        }
+        .file-label:hover {
+            background: #f8f9ff;
+            border-color: #764ba2;
+        }
+        .file-name {
+            margin-top: 8px;
+            font-size: 13px;
+            color: #666;
+        }
+        button {
+            width: 100%;
+            padding: 14px 24px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+        }
+        button:active {
+            transform: translateY(0);
+        }
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+        .response {
+            margin-top: 20px;
+            padding: 16px;
+            border-radius: 8px;
+            font-size: 13px;
+            line-height: 1.6;
+            font-family: 'Courier New', monospace;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .response.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .response.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .status {
+            display: inline-block;
+            padding: 6px 12px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-left: 8px;
+        }
+        .status.connected {
+            background: #d4edda;
+            color: #155724;
+        }
+        .status.disconnected {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        pre {
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        .token-display {
+            background: #fff3cd;
+            border: 1px solid #ffc107;
+            padding: 12px;
+            border-radius: 6px;
+            margin-top: 10px;
+            font-size: 12px;
+            word-break: break-all;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📸 PhotoSense Backend Tester</h1>
+            <p>Django REST API with JWT Authentication & AWS Integration</p>
+        </div>
+
+        <div class="content">
+            <!-- Auth Section -->
+            <div class="section">
+                <h2>🔐 Step 1: Authentication</h2>
+                
+                <div class="form-group">
+                    <label>Email</label>
+                    <input type="email" id="email" value="demo@photosense.com" placeholder="Enter email">
+                </div>
+
+                <div class="form-group">
+                    <label>Password</label>
+                    <input type="password" id="password" value="demo123456" placeholder="Enter password">
+                </div>
+
+                <button onclick="register()">Register New User</button>
+                <button onclick="login()" style="margin-top: 10px; background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);">Login</button>
+
+                <div id="auth-response"></div>
+            </div>
+
+            <!-- Upload Section -->
+            <div class="section">
+                <h2>📤 Step 2: Upload Photo</h2>
+                
+                <div class="form-group">
+                    <label>Select Image File</label>
+                    <div class="file-input-wrapper">
+                        <input type="file" id="file" accept="image/*" onchange="showFileName()">
+                        <label for="file" class="file-label">
+                            📁 Click to choose image
+                        </label>
+                        <div class="file-name" id="file-name"></div>
+                    </div>
+                </div>
+
+                <button onclick="uploadPhoto()" id="upload-btn" disabled>Upload Photo</button>
+
+                <div id="upload-response"></div>
+            </div>
+
+            <!-- Operations Section -->
+            <div class="section">
+                <h2>🔍 Step 3: View Results</h2>
+                
+                <button onclick="listPhotos()">List All Photos</button>
+                <button onclick="listPersons()" style="margin-top: 10px;">List Detected Persons</button>
+                
+                <div class="form-group" style="margin-top: 20px;">
+                    <label>Search Photos by Text (OCR)</label>
+                    <input type="text" id="search-query" placeholder="Enter text to search...">
+                    <button onclick="searchPhotos()" style="margin-top: 10px;">Search</button>
+                </div>
+
+                <div id="results-response"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:8000';
+        let accessToken = localStorage.getItem('accessToken') || '';
+
+        // Update upload button state
+        function updateUploadButton() {
+            const uploadBtn = document.getElementById('upload-btn');
+            const hasFile = document.getElementById('file').files.length > 0;
+            uploadBtn.disabled = !accessToken || !hasFile;
+        }
+
+        // Show selected file name
+        function showFileName() {
+            const file = document.getElementById('file').files[0];
+            const fileNameDiv = document.getElementById('file-name');
+            if (file) {
+                fileNameDiv.textContent = `Selected: ${file.name} (${(file.size / 1024).toFixed(2)} KB)`;
+            }
+            updateUploadButton();
+        }
+
+        // Display response
+        function displayResponse(elementId, data, isError = false) {
+            const el = document.getElementById(elementId);
+            el.className = `response ${isError ? 'error' : 'success'}`;
+            el.innerHTML = `<pre>${JSON.stringify(data, null, 2)}</pre>`;
+        }
+
+        // Register user
+        async function register() {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+
+            try {
+                const response = await fetch(`${API_BASE}/api/auth/register/`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, password })
+                });
+
+                const data = await response.json();
+                displayResponse('auth-response', data, !response.ok);
+            } catch (error) {
+                displayResponse('auth-response', { error: error.message }, true);
+            }
+        }
+
+        // Login
+        async function login() {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+
+            try {
+                const response = await fetch(`${API_BASE}/api/auth/login/`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username: email, password })
+                });
+
+                const data = await response.json();
+                
+                if (response.ok && data.access) {
+                    accessToken = data.access;
+                    localStorage.setItem('accessToken', accessToken);
+                    displayResponse('auth-response', { 
+                        message: '✅ Login successful!',
+                        access_token: accessToken.substring(0, 50) + '...',
+                        refresh_token: data.refresh.substring(0, 50) + '...'
+                    });
+                    updateUploadButton();
+                } else {
+                    displayResponse('auth-response', data, true);
+                }
+            } catch (error) {
+                displayResponse('auth-response', { error: error.message }, true);
+            }
+        }
+
+        // Upload photo
+        async function uploadPhoto() {
+            const fileInput = document.getElementById('file');
+            const file = fileInput.files[0];
+
+            if (!file) {
+                alert('Please select a file');
+                return;
+            }
+
+            if (!accessToken) {
+                alert('Please login first');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                displayResponse('upload-response', { message: '⏳ Uploading and processing (this may take 3-7 seconds)...' });
+
+                const response = await fetch(`${API_BASE}/api/photos/upload/`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${accessToken}` },
+                    body: formData
+                });
+
+                const data = await response.json();
+                
+                if (response.ok) {
+                    displayResponse('upload-response', {
+                        message: '✅ Photo uploaded successfully!',
+                        photo_id: data.id,
+                        faces_detected: data.faces_count,
+                        text_detected: data.detected_text,
+                        s3_key: data.s3_key
+                    });
+                } else {
+                    displayResponse('upload-response', data, true);
+                }
+            } catch (error) {
+                displayResponse('upload-response', { error: error.message }, true);
+            }
+        }
+
+        // List photos
+        async function listPhotos() {
+            if (!accessToken) {
+                alert('Please login first');
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/api/photos/`, {
+                    headers: { 'Authorization': `Bearer ${accessToken}` }
+                });
+
+                const data = await response.json();
+                displayResponse('results-response', {
+                    total_photos: data.length,
+                    photos: data
+                }, !response.ok);
+            } catch (error) {
+                displayResponse('results-response', { error: error.message }, true);
+            }
+        }
+
+        // List persons
+        async function listPersons() {
+            if (!accessToken) {
+                alert('Please login first');
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/api/persons/`, {
+                    headers: { 'Authorization': `Bearer ${accessToken}` }
+                });
+
+                const data = await response.json();
+                displayResponse('results-response', {
+                    total_persons: data.length,
+                    persons: data
+                }, !response.ok);
+            } catch (error) {
+                displayResponse('results-response', { error: error.message }, true);
+            }
+        }
+
+        // Search photos
+        async function searchPhotos() {
+            const query = document.getElementById('search-query').value;
+            
+            if (!accessToken) {
+                alert('Please login first');
+                return;
+            }
+
+            if (!query) {
+                alert('Please enter search text');
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/api/photos/search/?q=${encodeURIComponent(query)}`, {
+                    headers: { 'Authorization': `Bearer ${accessToken}` }
+                });
+
+                const data = await response.json();
+                displayResponse('results-response', {
+                    search_query: query,
+                    results_count: data.length,
+                    photos: data
+                }, !response.ok);
+            } catch (error) {
+                displayResponse('results-response', { error: error.message }, true);
+            }
+        }
+
+        // Check if already logged in
+        if (accessToken) {
+            displayResponse('auth-response', { 
+                message: '✅ Already logged in (token from localStorage)',
+                access_token: accessToken.substring(0, 50) + '...'
+            });
+            updateUploadButton();
+        }
+    </script>
+</body>
+</html>
