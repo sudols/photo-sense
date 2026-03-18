@@ -1,11 +1,22 @@
 from django.urls import path
-from rest_framework.routers import DefaultRouter
-from .views import PhotoViewSet, PersonViewSet, PhotoUploadView
-
-router = DefaultRouter()
-router.register("photos", PhotoViewSet, basename="photo")
-router.register("persons", PersonViewSet, basename="person")
+from .views import (
+    PhotoUploadView,
+    PhotoListView,
+    PhotoDetailView,
+    PhotoSearchView,
+    PersonListView,
+    PersonDetailView,
+    PersonMergeView,
+)
 
 urlpatterns = [
-    path("photos/upload/", PhotoUploadView.as_view()),  # must be before router
-] + router.urls
+    # Photo endpoints
+    path("photos/upload/", PhotoUploadView.as_view()),
+    path("photos/search/", PhotoSearchView.as_view()),
+    path("photos/", PhotoListView.as_view()),
+    path("photos/<uuid:pk>/", PhotoDetailView.as_view()),
+    # Person endpoints
+    path("persons/", PersonListView.as_view()),
+    path("persons/<uuid:pk>/", PersonDetailView.as_view()),
+    path("persons/<uuid:pk>/merge/", PersonMergeView.as_view()),
+]

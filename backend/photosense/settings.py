@@ -28,8 +28,7 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
-    "rest_framework",
-    "rest_framework_simplejwt",
+    "rest_framework_simplejwt",  # Still needed for JWT authentication
     "corsheaders",
     "photos",
 ]
@@ -100,17 +99,6 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 # Android does not enforce CORS (browser-only mechanism) — this only matters if
 # the DRF Browsable API is used from a browser during development.
 CORS_ALLOW_ALL_ORIGINS = DEBUG
-
-
-# Django REST Framework
-REST_FRAMEWORK = {
-    "DEFAULT_AUTHENTICATION_CLASSES": [
-        "rest_framework_simplejwt.authentication.JWTAuthentication",
-    ],
-    "DEFAULT_PERMISSION_CLASSES": [
-        "rest_framework.permissions.IsAuthenticated",
-    ],
-}
 
 
 # Simple JWT

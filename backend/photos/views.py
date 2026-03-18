@@ -1,25 +1,100 @@
 import uuid
 import os
+import json
 from django.utils import timezone
-from rest_framework import viewsets
-from rest_framework.views import APIView
-from rest_framework.decorators import action
-from rest_framework.response import Response
-from rest_framework.parsers import MultiPartParser
+from django.http import JsonResponse
+from django.views import View
+from django.views.decorators.csrf import csrf_exempt
+from django.utils.decorators import method_decorator
+from rest_framework_simplejwt.authentication import JWTAuthentication
+from rest_framework.exceptions import AuthenticationFailed
 
 from .models import Photo, Person, PhotoPerson
-from .serializers import PhotoSerializer, PersonSerializer
 from .ml import index_faces, detect_text, search_faces
 from .storage import upload_to_s3, delete_from_s3, get_presigned_url
 
 
-class PhotoUploadView(APIView):
-    parser_classes = [MultiPartParser]
+# Helper functions to replace serializers
+def photo_to_dict(photo):
+    """Convert Photo model instance to dictionary."""
+    return {
+        "id": str(photo.id),
+        "s3_key": photo.s3_key,
+        "url": get_presigned_url(photo.s3_key),
+        "face_ids": photo.face_ids,
+        "detected_text": photo.detected_text,
+        "detected_faces": photo.detected_faces,
+        "faces_count": photo.faces_count,
+        "analyzed_at": photo.analyzed_at.isoformat() if photo.analyzed_at else None,
+        "created_at": photo.created_at.isoformat(),
+        "updated_at": photo.updated_at.isoformat(),
+    }
+
+
+def person_to_dict(person, include_photos=False):
+    """Convert Person model instance to dictionary."""
+    data = {
+        "id": str(person.id),
+        "name": person.name,
+        "face_id": person.face_id,
+        "face_ids": person.face_ids,
+        "bounding_box": person.bounding_box,
+        "thumbnail_s3_key": person.thumbnail_s3_key,
+        "thumbnail_url": get_presigned_url(person.thumbnail_s3_key)
+        if person.thumbnail_s3_key
+        else None,
+        "is_unnamed": person.is_unnamed,
+        "created_at": person.created_at.isoformat(),
+        "updated_at": person.updated_at.isoformat(),
+    }
+
+    if include_photos:
+        photos = Photo.objects.filter(photo_persons__person=person)
+        data["photos"] = [photo_to_dict(p) for p in photos]
+    else:
+        data["photos"] = None
+
+    return data
+
+
+# Base class for authenticated views
+@method_decorator(csrf_exempt, name="dispatch")
+class AuthenticatedView(View):
+    """Base view that handles JWT authentication."""
+
+    def dispatch(self, request, *args, **kwargs):
+        # Authenticate using JWT
+        jwt_auth = JWTAuthentication()
+        try:
+            auth_result = jwt_auth.authenticate(request)
+            if auth_result is not None:
+                request.user, _ = auth_result
+            else:
+                return JsonResponse({"error": "Authentication required"}, status=401)
+        except AuthenticationFailed:
+            return JsonResponse({"error": "Invalid or expired token"}, status=401)
+
+        return super().dispatch(request, *args, **kwargs)
+
+    def json_response(self, data, status=200):
+        """Helper to return JSON response."""
+        return JsonResponse(data, status=status, safe=False)
+
+    def get_json_data(self):
+        """Helper to parse JSON from request body."""
+        try:
+            return json.loads(self.request.body) if self.request.body else {}
+        except json.JSONDecodeError:
+            return {}
+
+
+class PhotoUploadView(AuthenticatedView):
+    """Handle photo upload with face detection and clustering."""
 
     def post(self, request):
         file = request.FILES.get("file")
         if not file:
-            return Response({"error": "no file provided"}, status=400)
+            return self.json_response({"error": "no file provided"}, status=400)
 
         image_bytes = file.read()
         ext = os.path.splitext(file.name)[1].lower() or ".jpg"
@@ -48,9 +123,7 @@ class PhotoUploadView(APIView):
         for face in detected_faces:
             _cluster_face(face, photo, request.user)
 
-        return Response(
-            PhotoSerializer(photo, context={"request": request}).data, status=201
-        )
+        return self.json_response(photo_to_dict(photo), status=201)
 
 
 def _cluster_face(face, photo, user):
@@ -85,51 +158,110 @@ def _cluster_face(face, photo, user):
     )
 
 
-class PhotoViewSet(viewsets.ModelViewSet):
-    serializer_class = PhotoSerializer
+class PhotoListView(AuthenticatedView):
+    """List all photos for the authenticated user."""
 
-    def get_queryset(self):
-        return Photo.objects.filter(owner=self.request.user)
+    def get(self, request):
+        photos = Photo.objects.filter(owner=request.user)
+        return self.json_response([photo_to_dict(p) for p in photos])
 
-    def perform_destroy(self, instance):
-        delete_from_s3(instance.s3_key)
-        instance.delete()
 
-    @action(detail=False, methods=["get"])
-    def search(self, request):
-        query = request.query_params.get("q", "").strip()
+class PhotoDetailView(AuthenticatedView):
+    """Get, update, or delete a single photo."""
+
+    def get(self, request, pk):
+        try:
+            photo = Photo.objects.get(id=pk, owner=request.user)
+            return self.json_response(photo_to_dict(photo))
+        except Photo.DoesNotExist:
+            return self.json_response({"error": "Photo not found"}, status=404)
+
+    def delete(self, request, pk):
+        try:
+            photo = Photo.objects.get(id=pk, owner=request.user)
+            delete_from_s3(photo.s3_key)
+            photo.delete()
+            return self.json_response({"message": "Photo deleted"}, status=204)
+        except Photo.DoesNotExist:
+            return self.json_response({"error": "Photo not found"}, status=404)
+
+
+class PhotoSearchView(AuthenticatedView):
+    """Search photos by detected text."""
+
+    def get(self, request):
+        query = request.GET.get("q", "").strip()
         if not query:
-            return Response([])
+            return self.json_response([])
+
         # Server-side search — fixes the current client-side full-scan bug
-        photos = self.get_queryset().filter(detected_text__icontains=query)
-        return Response(
-            PhotoSerializer(photos, many=True, context={"request": request}).data
+        photos = Photo.objects.filter(
+            owner=request.user, detected_text__icontains=query
         )
+        return self.json_response([photo_to_dict(p) for p in photos])
 
 
-class PersonViewSet(viewsets.ModelViewSet):
-    serializer_class = PersonSerializer
+class PersonListView(AuthenticatedView):
+    """List all persons for the authenticated user."""
 
-    def get_queryset(self):
-        return Person.objects.filter(owner=self.request.user)
+    def get(self, request):
+        persons = Person.objects.filter(owner=request.user)
+        return self.json_response([person_to_dict(p) for p in persons])
 
-    def retrieve(self, request, *args, **kwargs):
-        # Include photos only on detail view
-        instance = self.get_object()
-        serializer = self.get_serializer(
-            instance,
-            context={**self.get_serializer_context(), "include_photos": True},
-        )
-        return Response(serializer.data)
 
-    @action(detail=True, methods=["post"])
-    def merge(self, request, pk=None):
-        from_person = self.get_object()
-        merge_into_id = request.data.get("merge_into_id")
+class PersonDetailView(AuthenticatedView):
+    """Get, update, or delete a single person."""
+
+    def get(self, request, pk):
+        try:
+            person = Person.objects.get(id=pk, owner=request.user)
+            # Include photos on detail view
+            return self.json_response(person_to_dict(person, include_photos=True))
+        except Person.DoesNotExist:
+            return self.json_response({"error": "Person not found"}, status=404)
+
+    def patch(self, request, pk):
+        try:
+            person = Person.objects.get(id=pk, owner=request.user)
+            data = self.get_json_data()
+
+            # Update allowed fields
+            if "name" in data:
+                person.name = data["name"]
+                person.is_unnamed = False
+            if "is_unnamed" in data:
+                person.is_unnamed = data["is_unnamed"]
+
+            person.save()
+            return self.json_response(person_to_dict(person, include_photos=True))
+        except Person.DoesNotExist:
+            return self.json_response({"error": "Person not found"}, status=404)
+
+    def delete(self, request, pk):
+        try:
+            person = Person.objects.get(id=pk, owner=request.user)
+            person.delete()
+            return self.json_response({"message": "Person deleted"}, status=204)
+        except Person.DoesNotExist:
+            return self.json_response({"error": "Person not found"}, status=404)
+
+
+class PersonMergeView(AuthenticatedView):
+    """Merge two persons together."""
+
+    def post(self, request, pk):
+        try:
+            from_person = Person.objects.get(id=pk, owner=request.user)
+        except Person.DoesNotExist:
+            return self.json_response({"error": "Person not found"}, status=404)
+
+        data = self.get_json_data()
+        merge_into_id = data.get("merge_into_id")
+
         try:
             to_person = Person.objects.get(id=merge_into_id, owner=request.user)
         except Person.DoesNotExist:
-            return Response({"error": "target person not found"}, status=404)
+            return self.json_response({"error": "target person not found"}, status=404)
 
         # Merge face_ids
         combined = list(set(to_person.face_ids + from_person.face_ids))
@@ -144,4 +276,4 @@ class PersonViewSet(viewsets.ModelViewSet):
         )
 
         from_person.delete()
-        return Response(PersonSerializer(to_person).data)
+        return self.json_response(person_to_dict(to_person))
