@@ -4,16 +4,16 @@ config:
 ---
 sequenceDiagram
     actor U as User
-    participant FA as Flutter App
+    participant CLIENT as Mobile/Web Client
     participant API as Django API<br/>(PhotoUploadView)
     participant S3 as Amazon S3
     participant RK as Amazon Rekognition
     participant DB as Database
 
-    U->>FA: Select photo(s) from device
-    FA->>FA: Read file bytes
+    U->>CLIENT: Select photo(s)
+    CLIENT->>CLIENT: Read file bytes
 
-    FA->>API: POST /api/photos/upload/<br/>[multipart/form-data + JWT]
+    CLIENT->>API: POST /api/photos/upload/<br/>[multipart/form-data + JWT]
     activate API
 
     Note over API: image_bytes = file.read()<br/>All subsequent calls use this<br/>single in-memory buffer
@@ -59,8 +59,8 @@ sequenceDiagram
 
     Note over API: Step 6: Return Response
     API->>DB: Generate presigned URL for s3_key
-    API-->>FA: 201 Created {Photo JSON with presigned URL}
+    API-->>CLIENT: 201 Created {Photo JSON with presigned URL}
     deactivate API
 
-    FA->>FA: Parse Photo.fromJson()
-    FA-->>U: Show success SnackBar<br/>Refresh photo grid
+    CLIENT->>CLIENT: Display photo
+    CLIENT-->>U: Show success message

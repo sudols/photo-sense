@@ -24,7 +24,7 @@
 
 ```
 ┌────────────────┐
-│  Flutter App   │
+│  Client   │
 └────────┬───────┘
          │ 1. POST /api/auth/login
          │    {username, password}
@@ -40,7 +40,7 @@
          │    {access, refresh}
          ▼
 ┌────────────────┐
-│  Flutter App   │
+│  Client   │
 │  Stores tokens │
 └────────┬───────┘
          │ 3. Subsequent requests
@@ -219,7 +219,7 @@ SIMPLE_JWT = {
 | **Storage** | Redis/DB for sessions | No storage needed |
 
 **For PhotoSense:**
-- ✅ Mobile app (Flutter) - JWT works better than cookies
+- ✅ Mobile/web client - JWT works better than cookies
 - ✅ Small scale - don't need session management overhead
 - ✅ Stateless backend - easier to deploy
 
@@ -641,7 +641,7 @@ CORS_ALLOWED_ORIGINS = [
 
 **Why needed:**
 - Browsers block cross-origin requests by default
-- Flutter web app might run on different domain
+- Web client might run on different domain
 - Mobile apps don't enforce CORS (browser-only mechanism)
 
 ---

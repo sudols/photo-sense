@@ -8,7 +8,7 @@
 ═══════════════════════════════════════════════════════════════════
 
 ┌─────────────┐
-│ Flutter App │
+│ Client │
 └──────┬──────┘
        │ POST /api/auth/register/
        │ {
@@ -50,7 +50,7 @@
                        │ Success
                        ▼
                 ┌─────────────┐
-                │ Flutter App │
+                │ Client │
                 │ Shows:      │
                 │ "Account    │
                 │  created!"  │
@@ -62,7 +62,7 @@
 ═══════════════════════════════════════════════════════════════════
 
 ┌─────────────┐
-│ Flutter App │
+│ Client │
 └──────┬──────┘
        │ POST /api/auth/login/
        │ {
@@ -121,7 +121,7 @@
                  │
                  ▼
           ┌─────────────┐
-          │ Flutter App │
+          │ Client │
           │ Stores:     │
           │ • access    │
           │ • refresh   │
@@ -135,7 +135,7 @@
 ═══════════════════════════════════════════════════════════════════
 
 ┌─────────────┐
-│ Flutter App │
+│ Client │
 │ Has tokens  │
 │ stored      │
 └──────┬──────┘
@@ -214,7 +214,7 @@
                    │ JSON Response
                    ▼
             ┌─────────────┐
-            │ Flutter App │
+            │ Client │
             │ Displays    │
             │ photos      │
             └─────────────┘
@@ -227,7 +227,7 @@
 After 1 day, access token expires...
 
 ┌─────────────┐
-│ Flutter App │
+│ Client │
 │ Access token│
 │ expired ✗   │
 └──────┬──────┘
@@ -259,7 +259,7 @@ After 1 day, access token expires...
                    │
                    ▼
             ┌─────────────┐
-            │ Flutter App │
+            │ Client │
             │ Updates     │
             │ stored      │
             │ access token│

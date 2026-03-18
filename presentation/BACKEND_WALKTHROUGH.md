@@ -22,7 +22,7 @@
 - A photo management application with AI-powered face detection and text recognition
 - Automatically detects and clusters faces across your photo library
 - OCR capability to search photos by text content
-- Built with Django backend + Flutter mobile frontend
+- Built with Django backend serving REST API
 
 **Core Features:**
 - 📸 Photo upload with automatic face detection
@@ -468,7 +468,7 @@ def get(self, request, pk):
 
 **Opening (1 min):**
 - "PhotoSense is a photo management app with AI-powered features"
-- "Backend: Django + AWS, Frontend: Flutter"
+- "Backend: Django + AWS, Clients: Mobile/Web"
 - "13 API endpoints, 3 database models, AWS integration"
 
 **Database Models (2 mins):**

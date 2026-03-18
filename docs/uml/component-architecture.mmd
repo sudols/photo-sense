@@ -1,15 +1,12 @@
 graph TB
-    subgraph "User Device"
-        subgraph "Flutter Application"
-            UI["UI Layer<br/>Screens + Widgets"]
-            SVC["Service Layer<br/>ApiClient, AuthService,<br/>PhotoService, PersonService"]
-        end
+    subgraph "Client Layer"
+        CLIENT["Mobile/Web Client<br/>(HTTP Requests)"]
     end
 
     subgraph "Render.com (Cloud)"
         subgraph "Django Backend"
             GUN["Gunicorn<br/>(WSGI Server)"]
-            DRF["Django REST Framework<br/>(Views + Serializers)"]
+            VIEWS["Django Views<br/>(REST API Endpoints)"]
             JWT["SimpleJWT<br/>(Authentication)"]
             ORM["Django ORM<br/>(Models)"]
             ML["ML Module<br/>(ml.py - boto3)"]
@@ -23,21 +20,19 @@ graph TB
         RK["Amazon Rekognition<br/>(Face Collection)"]
     end
 
-    UI --> SVC
-    SVC -->|"HTTPS REST"| GUN
-    GUN --> DRF
-    DRF --> JWT
-    DRF --> ORM
-    DRF --> ML
-    DRF --> STR
+    CLIENT -->|"HTTPS REST + JWT"| GUN
+    GUN --> VIEWS
+    VIEWS --> JWT
+    VIEWS --> ORM
+    VIEWS --> ML
+    VIEWS --> STR
     ORM -->|"SQL"| PG
     ML -->|"boto3 API"| RK
     STR -->|"boto3 API"| S3
 
-    style UI fill:#0553B1,color:#fff
-    style SVC fill:#0553B1,color:#fff
+    style CLIENT fill:#0553B1,color:#fff
     style GUN fill:#0C4B33,color:#fff
-    style DRF fill:#0C4B33,color:#fff
+    style VIEWS fill:#0C4B33,color:#fff
     style JWT fill:#0C4B33,color:#fff
     style ORM fill:#0C4B33,color:#fff
     style ML fill:#0C4B33,color:#fff
