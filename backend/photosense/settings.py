@@ -98,7 +98,14 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 # CORS: allow Flutter app (any origin in dev)
 # Android does not enforce CORS (browser-only mechanism) — this only matters if
 # the DRF Browsable API is used from a browser during development.
-CORS_ALLOW_ALL_ORIGINS = DEBUG
+if DEBUG:
+    CORS_ALLOW_ALL_ORIGINS = True
+else:
+    CORS_ALLOWED_ORIGINS = [
+        o.strip()
+        for o in os.environ.get("CORS_ALLOWED_ORIGINS", "").split(",")
+        if o.strip()
+    ]
 
 
 # Simple JWT
