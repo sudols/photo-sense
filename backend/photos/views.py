@@ -134,10 +134,12 @@ def _cluster_face(face, photo, user):
 
     if matched_id:
         # Find person who owns the matched face
-        person = Person.objects.filter(
-            owner=user,
-            face_ids__contains=matched_id,
-        ).first()
+        # Use Python-side filtering — face_ids__contains on JSONField
+        # is not reliable across all database backends.
+        person = next(
+            (p for p in Person.objects.filter(owner=user) if matched_id in p.face_ids),
+            None,
+        )
         if person and face_id not in person.face_ids:
             person.face_ids.append(face_id)
             person.save(update_fields=["face_ids", "updated_at"])

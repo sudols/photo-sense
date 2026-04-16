@@ -59,7 +59,7 @@ def search_faces(face_id):
         response = client.search_faces(
             CollectionId=COLLECTION_ID,
             FaceId=face_id,
-            FaceMatchThreshold=40,
+            FaceMatchThreshold=90,
             MaxFaces=1,
         )
         matches = response.get("FaceMatches", [])
