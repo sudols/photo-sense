@@ -21,8 +21,7 @@ services:
         value: ap-south-1
       - key: S3_BUCKET_NAME
         sync: false
-      - key: REKOGNITION_COLLECTION_ID
-        value: photosense-faces
+
 
 databases:
   - name: photosense-db
