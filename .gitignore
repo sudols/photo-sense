@@ -44,3 +44,13 @@ htmlcov/
 .gradle/
 **/build/
 local.properties
+
+# Flutter and Dart build artifacts
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+
+# Scratch and redundant files
+replacements.txt
+docs/uml.zip
