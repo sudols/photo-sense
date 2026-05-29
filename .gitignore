@@ -39,3 +39,8 @@ credentials
 .coverage
 htmlcov/
 .pytest_cache/
+
+# Gradle and Android build files
+.gradle/
+**/build/
+local.properties
