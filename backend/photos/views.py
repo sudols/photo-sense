@@ -96,6 +96,22 @@ class PhotoUploadView(AuthenticatedView):
         if not file:
             return self.json_response({"error": "no file provided"}, status=400)
 
+        # Enforce maximum 3MB file size limit to prevent AWS bandwidth/S3/Rekognition abuse
+        MAX_SIZE_BYTES = 5 * 1024 * 1024  # 5MB
+        if file.size > MAX_SIZE_BYTES:
+            return self.json_response(
+                {"error": "File size exceeds 5MB limit. Please upload a smaller compressed image."},
+                status=400,
+            )
+
+        # Enforce maximum 30 photos total per portfolio user account to protect S3 storage and Rekognition budget
+        existing_count = Photo.objects.filter(owner=request.user).count()
+        if existing_count >= 30:
+            return self.json_response(
+                {"error": "Portfolio upload quota exceeded: Limit of 30 photos per account reached."},
+                status=403,
+            )
+
         image_bytes = file.read()
         ext = os.path.splitext(file.name)[1].lower() or ".jpg"
         s3_key = f"photos/{request.user.id}/{uuid.uuid4()}{ext}"
