@@ -15,6 +15,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = os.environ.get("SECRET_KEY", "django-insecure-dev-only-change-in-prod")
 DEBUG = os.getenv("DEBUG", "False") == "True"
+TURNSTILE_SECRET_KEY = os.environ.get("TURNSTILE_SECRET_KEY", "1x0000000000000000000000000000000AA")
 
 ALLOWED_HOSTS = ["*"]  # tighten for production
 
