@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { register } from "@/api/auth";
+import { Turnstile } from "@marsidev/react-turnstile";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -21,6 +22,7 @@ export default function RegisterPage() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [turnstileToken, setTurnstileToken] = useState("");
 
   const registered = searchParams.get("registered") === "1";
 
@@ -33,15 +35,22 @@ export default function RegisterPage() {
       return;
     }
 
+    if (!turnstileToken) {
+      setError("Please complete the security check.");
+      return;
+    }
+
     setLoading(true);
     try {
-      await register(email, password);
+      await register(email, password, turnstileToken);
       navigate("/login?registered=1");
     } catch (err: unknown) {
       const message =
         (err as { response?: { data?: { error?: string } } })?.response?.data
           ?.error || "Registration failed";
       setError(message);
+      // Reset Turnstile token on error so they have to pass it again (or it resets automatically depending on widget settings)
+      setTurnstileToken("");
     } finally {
       setLoading(false);
     }
@@ -99,7 +108,15 @@ export default function RegisterPage() {
                 required
               />
             </div>
-            <Button type="submit" className="w-full" disabled={loading}>
+            <div className="flex justify-center py-2">
+              <Turnstile 
+                siteKey={import.meta.env.VITE_TURNSTILE_SITE_KEY || "1x00000000000000000000AA"} 
+                onSuccess={(token) => setTurnstileToken(token)}
+                onError={() => setError("Security check failed. Please try again.")}
+                onExpire={() => setTurnstileToken("")}
+              />
+            </div>
+            <Button type="submit" className="w-full" disabled={loading || !turnstileToken}>
               {loading ? "Creating account..." : "Create Account"}
             </Button>
           </form>

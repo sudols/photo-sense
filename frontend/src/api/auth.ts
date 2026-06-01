@@ -1,14 +1,14 @@
 import api from "./axios";
 
-export async function login(username: string, password: string) {
-  const { data } = await api.post("/api/auth/login/", { username, password });
+export async function login(username: string, password: string, turnstileToken: string) {
+  const { data } = await api.post("/api/auth/login/", { username, password, turnstileToken });
   localStorage.setItem("access", data.access);
   localStorage.setItem("refresh", data.refresh);
   return data;
 }
 
-export async function register(email: string, password: string) {
-  const { data } = await api.post("/api/auth/register/", { email, password });
+export async function register(email: string, password: string, turnstileToken: string) {
+  const { data } = await api.post("/api/auth/register/", { email, password, turnstileToken });
   return data;
 }
 
