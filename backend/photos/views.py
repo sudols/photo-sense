@@ -295,3 +295,6 @@ class PersonMergeView(AuthenticatedView):
 
         from_person.delete()
         return self.json_response(person_to_dict(to_person))
+
+def health(request):
+    return JsonResponse({"status": "ok"}, status=200)
