@@ -4,7 +4,7 @@
 
 ---
 
-## 📖 Overview
+## Overview
 
 PhotoSense is a photo management system backend built with Django, featuring:
 - **JWT Authentication** - Secure, stateless token-based auth
@@ -15,7 +15,7 @@ PhotoSense is a photo management system backend built with Django, featuring:
 
 ---
 
-## 🏗️ Architecture
+## Architecture
 
 ### Tech Stack
 - **Backend Framework**: Django 4.2
@@ -50,7 +50,7 @@ PhotoSense is a photo management system backend built with Django, featuring:
 
 ---
 
-## 📁 Project Structure
+## Project Structure
 
 ```
 photo_sense/
@@ -78,7 +78,7 @@ photo_sense/
 
 ---
 
-## 🔐 Database Schema
+## Database Schema
 
 **4 Tables** with UUID primary keys:
 
@@ -103,7 +103,7 @@ photo_sense/
 
 ---
 
-## 🚀 API Endpoints (13 total)
+## API Endpoints (13 total)
 
 ### Authentication (3)
 - `POST /api/auth/register/` - User registration
@@ -153,7 +153,7 @@ photo_sense/
 
 ---
 
-## 📚 Presentation Documentation
+## Presentation Documentation
 
 Comprehensive guides for project showcase:
 
@@ -166,7 +166,7 @@ Comprehensive guides for project showcase:
 
 ---
 
-## 🛠️ Setup & Installation
+## Setup & Installation
 
 ### Prerequisites
 - Python 3.10+
@@ -197,7 +197,7 @@ Server runs at `http://localhost:8000`
 
 ---
 
-## 📊 Project Stats
+## Project Stats
 
 - **Lines of Code**: ~500 (backend only)
 - **API Endpoints**: 13
@@ -208,7 +208,7 @@ Server runs at `http://localhost:8000`
 
 ---
 
-## 🎓 Academic Context
+## Academic Context
 
 This is a **semester project** demonstrating:
 - REST API design and implementation
@@ -222,6 +222,6 @@ This is a **semester project** demonstrating:
 
 ---
 
-## 📝 License
+## License
 
 This project is for educational purposes (semester project showcase).
